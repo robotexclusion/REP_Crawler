@@ -11,7 +11,6 @@ from src.parse import *
 from pathlib import Path
 from datetime import datetime
 
-
 #main function
 async def main():
     #set vars

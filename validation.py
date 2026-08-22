@@ -13,18 +13,21 @@ def main():
     num_samples = 100
     np.random.seed(seed_value)
 
+    current_dir = Path.cwd()
+    base_dir = current_dir / "data"
+
     print("REP Crawler Validation")
     print("Type of validation to perform (1 = single crawl, 2 = multiple crawls): ")
     validation_type = input().strip()
     match validation_type:
         case "1":
-            single_crawl_validation(seed_value, num_samples)
+            single_crawl_validation(seed_value, num_samples, base_dir)
         case "2":
-            multiple_crawl_validation(seed_value, num_samples)
+            multiple_crawl_validation(seed_value, num_samples, base_dir)
         case _:
             print("Invalid option selected. Exiting.")
     
-def multiple_crawl_validation(seed_value, num_samples):
+def multiple_crawl_validation(seed_value, num_samples, base_dir):
     print(f"Random seed value: {seed_value}")
     print(f"Number of samples: {num_samples}")
 
@@ -34,7 +37,7 @@ def multiple_crawl_validation(seed_value, num_samples):
     crawl_ids = [crawl_id.strip() for crawl_id in crawl_ids_input.split(",")]
 
     for crawl_id in crawl_ids:
-        crawl_dir = Path("/data") / crawl_id
+        crawl_dir = base_dir / crawl_id
         crawl_db_path = crawl_dir / "metadata.sqlite"
         parsed_db_path = crawl_dir / "parsed.sqlite"
 
@@ -56,26 +59,22 @@ def multiple_crawl_validation(seed_value, num_samples):
 
         print(f"Samples saved to: {crawl_dir / crawl_sample_file_name} and {crawl_dir / parsed_sample_file_name}")
 
-def single_crawl_validation(seed_value, num_samples):
+def single_crawl_validation(seed_value, num_samples, base_dir):
     print(f"Random seed value: {seed_value}")
     print(f"Number of samples: {num_samples}")
 
     #grab crawl id for validation
     print("Crawl ID to validate (numeric identifier of the crawl directory): ")
     crawl_id = input().strip()
-    crawl_dir = Path("/data") / crawl_id
+    crawl_dir = base_dir / crawl_id
     crawl_db_path = crawl_dir / "metadata.sqlite"
     parsed_db_path = crawl_dir / "parsed.sqlite"
 
     print("Gathering samples from crawl database")
-    crawl_db_df = pd.read_sql_query(""""
-    SELECT * FROM crawl", sqlite3.connect(crawl_db_path)
-    """)
+    crawl_db_df = pd.read_sql_query("SELECT * FROM crawl", sqlite3.connect(crawl_db_path))
 
     print("Gathering samples from parsed database")
-    parsed_db_df = pd.read_sql_query(""""
-    SELECT * FROM files", sqlite3.connect(parsed_db_path)
-    """)
+    parsed_db_df = pd.read_sql_query("SELECT * FROM files", sqlite3.connect(parsed_db_path))
 
     print("Generating random samples")
     crawl_sample = crawl_db_df.sample(n=num_samples, random_state=seed_value)
