@@ -3,23 +3,14 @@
 #imports
 import os
 import sqlite3
-import aiohttp
 import asyncio
-import hashlib
-import time
-import json
-import re
-import requests
 import pandas as pd
-import numpy as np
 from src.crawler import *
 from src.startup import *
 from src.parse import *
 from pathlib import Path
 from datetime import datetime
-from tqdm.asyncio import tqdm_asyncio
-from tqdm.auto import tqdm
-from bs4 import BeautifulSoup
+
 
 #main function
 async def main():
@@ -35,7 +26,8 @@ async def main():
     #Generate a unique crawl ID
     crawl_id = datetime.now().strftime("%Y%m%d%H%M")
     #Set vars for unique crawl path and sub-directories
-    base_dir = Path("/data")
+    current_dir = Path.cwd()
+    base_dir = current_dir / "data"
     crawl_dir = base_dir / crawl_id
     robots_dir = crawl_dir / "robots"
     meta_dir = crawl_dir / "meta"
@@ -46,23 +38,15 @@ async def main():
     crawl_db_path = crawl_dir / "metadata.sqlite"
     parsed_db_path = crawl_dir / "parsed.sqlite"
 
-
     #Make folders to for sub directories if they don't exist
+    base_dir.mkdir(parents=True, exist_ok=True)
     crawl_dir.mkdir(parents=True, exist_ok=True)
     robots_dir.mkdir(parents=True, exist_ok=True)
     meta_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-
-    tranco_email = os.environ.get("tranco_email")
-    tranco_api_token = os.environ.get("tranco_api_token")
-    tranco_api_base = "https://tranco-list.eu/api"
-
-
-
-
     #Get TRANCO
-    TRANCO_FILE = download_latest_tranco_list()
+    TRANCO_FILE = download_latest_tranco_list(crawl_dir)
 
     #check if master database exists, if not create it
     if not os.path.exists(master_domain_db_path):
@@ -104,8 +88,8 @@ async def main():
         parsed_cur = parsed_conn.cursor()
 
         #create new dataframes for parsing, drop nas in filename and meta
-        filtered_files = fetches_df.dropna(subset=['filename'])
-        filtered_meta = fetches_df.dropna(subset=['meta_tags'])
+        # filtered_files = fetches_df.dropna(subset=['filename'])
+        # filtered_meta = fetches_df.dropna(subset=['meta_tags'])
 
         #send the dataframe through the parsing process
         #parse_crawl_files(filtered_files)

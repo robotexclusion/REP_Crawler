@@ -1,5 +1,15 @@
 #Holds functions for running the crawler
 
+#imports
+
+import aiohttp
+import asyncio
+import hashlib
+import time
+import json
+from datetime import datetime
+from tqdm.asyncio import tqdm_asyncio
+from bs4 import BeautifulSoup
 
 #utf-8 decoding for text parsing
 def sha256_text(text):

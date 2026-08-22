@@ -1,7 +1,20 @@
 #Holds functions for setting up the crawler
 
+#imports
+import os
+import requests
+import sqlite3
+
+
+
+
 #function for getting the latest Tranco list
 def get_latest_tranco_list():
+
+    tranco_email = os.environ.get("tranco_email")
+    tranco_api_token = os.environ.get("tranco_api_token")
+    tranco_api_base = "https://tranco-list.eu/api"
+
     response = requests.get(
         f"{tranco_api_base}/lists/date/latest",
         auth=(tranco_email, tranco_api_token),
@@ -18,7 +31,7 @@ def get_latest_tranco_list():
     return data
 
 #grab the latest Tranco list, download and save in the crawl dir
-def download_latest_tranco_list():
+def download_latest_tranco_list(crawl_dir):
     tranco_info = get_latest_tranco_list()
     tranco_list_id = tranco_info["list_id"]
     tranco_download_url = tranco_info["download"]
@@ -29,7 +42,6 @@ def download_latest_tranco_list():
         tranco_download_url,
         timeout=120
     )
-
     response.raise_for_status()
 
     with open(tranco_file, "wb") as f:
@@ -41,8 +53,8 @@ def download_latest_tranco_list():
 
 #Create db file for domains if it doesnt exist already
 def create_domain_database(master_domain_db_path):
-    master_conn = sqlite3.connect(master_domain_db_path)
-    cur = master_conn.cursor()
+    conn = sqlite3.connect(master_domain_db_path)
+    cur = conn.cursor()
 
     #Table to store domain name info
     cur.execute("""
@@ -53,9 +65,10 @@ def create_domain_database(master_domain_db_path):
         """)
 
     #commit and return
-    master_conn.commit()
+    conn.commit()
+    cur.close()
     print(f"Created master domain database at: {master_domain_db_path}")
-    return master_conn
+    return conn
 
 #Create the db file for the crawl
 def create_crawl_database(crawl_db_path):
@@ -109,7 +122,7 @@ def create_crawl_database(crawl_db_path):
 
     #commit and return
     conn.commit()
-
+    cur.close()
     print(f"Created crawl database at: {crawl_db_path}")
     return conn
 
@@ -117,8 +130,10 @@ def create_crawl_database(crawl_db_path):
 def prime_main_domain_db(master_conn, df):
     for row in df.itertuples():
         domain = row.domain
-        master_cur.execute("INSERT OR REPLACE INTO master_domain_names(domain_name) VALUES (?)",
+        cur = master_conn.cursor()
+        cur.execute("INSERT OR REPLACE INTO master_domain_names(domain_name) VALUES (?)",
             (domain,)
         )
         master_conn.commit()
+        cur.close()
     print(f"Primed master domain database with {len(df)} domains.")

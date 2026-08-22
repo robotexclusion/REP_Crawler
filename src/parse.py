@@ -1,5 +1,11 @@
 #Holds functions for parsing the crawled data
 
+#imports
+import sqlite3
+import json
+from tqdm.auto import tqdm
+from bs4 import BeautifulSoup
+
 #function to create the parsing db file for after crawl
 def create_parser_database(parsed_db_path):
     parsed_conn = sqlite3.connect(parsed_db_path)
@@ -76,7 +82,7 @@ def normalize_directive(value):
     return value.strip().lower()
 
 #function to chekc the directive against the standard list to see if it might be malformed or unusual
-def classify_directive(directive):
+def classify_directive(directive, STANDARD_DIRECTIVES):
     if directive == "user-agent":
         return "USER_AGENT"
     if directive in STANDARD_DIRECTIVES:
@@ -212,7 +218,7 @@ def parse_robot_file(
                 index,
                 directive,
                 value,
-                classify_directive(directive),
+                classify_directive(directive, STANDARD_DIRECTIVES),
                 raw
             ))
 
