@@ -1,10 +1,10 @@
 [project]
 name = "rep-crawler"
 version = "0.1.0"
-description = "Add your description here"
+description = "Crawls domains in the TRANCO list to find implementations of Robots Exclusion Protocol"
 readme = "README.md"
 authors = [
-    { name = "Todd", email = "gyphonic2011@gmail.com" }
+    { name = "robot"}
 ]
 requires-python = ">=3.14"
 dependencies = [
