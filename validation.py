@@ -54,7 +54,7 @@ def multiple_crawl_validation(seed_value, num_samples):
         crawl_sample.to_csv(crawl_dir / crawl_sample_file_name, index=False)
         parsed_sample.to_csv(crawl_dir / parsed_sample_file_name, index=False)
 
-        print(f"Samples saved to: {crawl_dir / crawl_sample_file_name} and {crawl_dir / parsed_sample_file_name}")l
+        print(f"Samples saved to: {crawl_dir / crawl_sample_file_name} and {crawl_dir / parsed_sample_file_name}")
 
 def single_crawl_validation(seed_value, num_samples):
     print(f"Random seed value: {seed_value}")

@@ -1,7 +1,6 @@
 #Holds functions for running the crawler
 
 #imports
-
 import aiohttp
 import asyncio
 import hashlib
@@ -19,7 +18,7 @@ def sha256_text(text):
     ).hexdigest()
 
 #functrion to save and name the captured robots files with unique identifiers
-def save_robot_file(content, fetch_id):
+def save_robot_file(content, fetch_id, robots_dir, crawl_dir):
 
     #give the file a unique id based off the fetch number
     filename = f"{fetch_id:09d}.txt"
@@ -33,7 +32,8 @@ def save_robot_file(content, fetch_id):
 
 #function to grab domain IDs for the crawl
 def get_domain_id(conn, master_conn, domain):
-
+    master_cur = master_conn.cursor()
+    cur = conn.cursor()
     #grab the master id key
     master_cur.execute(
         "SELECT master_domain_id FROM master_domain_names WHERE domain_name=?",
@@ -53,6 +53,8 @@ def get_domain_id(conn, master_conn, domain):
         (master_domain_id,)
     )
 
+    master_cur.close()
+    cur.close()
     return cur.fetchone()[0]
 
 #function to check what the content type of the domain is
@@ -232,11 +234,13 @@ async def fetch_robot(session, domain):
     }
 
 #function for storing data for individual domains during crawl
-async def process_domain(session, row, conn, master_conn):
+async def process_domain(session, row, conn, master_conn, crawl_id):
     domain = row.domain
     rank = row.Index
     result = await fetch_robot(session, domain)
     domain_id = get_domain_id(conn, master_conn, domain)
+    cur = conn.cursor()
+    master_cur = master_conn.cursor()
 
     # Insert initial metadata row
     cur.execute("""
@@ -323,7 +327,7 @@ async def process_domain(session, row, conn, master_conn):
     conn.commit()
 
 #function for connections and running the crawler
-async def run_crawl(df):
+async def run_crawl(df, USER_AGENT, TIMEOUT, CONCURRENCY, LIMIT_PER_HOST, conn, master_conn, crawl_id):
     timeout = aiohttp.ClientTimeout(
         total=TIMEOUT
     )
@@ -351,7 +355,8 @@ async def run_crawl(df):
                     session,
                     row,
                     conn,
-                    master_conn
+                    master_conn,
+                    crawl_id
                 )
             )
         await tqdm_asyncio.gather(

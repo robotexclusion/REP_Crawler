@@ -14,7 +14,6 @@ from datetime import datetime
 
 #main function
 async def main():
-
     #set vars
     USER_AGENT = "REP_Research_Crawler"
     #Concurrency and timeout options to not overload ISP
@@ -23,6 +22,7 @@ async def main():
     TIMEOUT = 15
     # optional test size, set to None for unlimited/full list
     MAX_DOMAINS = 100
+    
     #Generate a unique crawl ID
     crawl_id = datetime.now().strftime("%Y%m%d%H%M")
     #Set vars for unique crawl path and sub-directories
@@ -76,7 +76,15 @@ async def main():
     print("Ready")
     input("Execute crawl? (y/n): ")
     if input().lower() == 'y':
-        await run_crawl(domains_df)
+        await run_crawl(domains_df, 
+                        USER_AGENT, 
+                        TIMEOUT, 
+                        CONCURRENCY, 
+                        LIMIT_PER_HOST, 
+                        conn, 
+                        master_conn, 
+                        crawl_id
+                        )
     else:
         print("Crawl aborted.")
         return
@@ -87,7 +95,7 @@ async def main():
         parsed_conn = create_parser_database(parsed_db_path)
         parsed_cur = parsed_conn.cursor()
 
-        #create new dataframes for parsing, drop nas in filename and meta
+        # create new dataframes for parsing, drop nas in filename and meta
         # filtered_files = fetches_df.dropna(subset=['filename'])
         # filtered_meta = fetches_df.dropna(subset=['meta_tags'])
 

@@ -93,9 +93,11 @@ def classify_directive(directive, STANDARD_DIRECTIVES):
 def parse_robot_file(
     fetch_id,
     filename,
-    sha256
+    sha256,
+    crawl_dir,
+    parsed_conn
 ):
-
+    cur = parsed_conn.cursor()
     #var for standard dirctives, to see if something is unusual in the files
     STANDARD_DIRECTIVES = {
         "user-agent",
@@ -126,7 +128,7 @@ def parse_robot_file(
     blank = 0
     errors = 0
 
-    parsed_cur.execute("""
+    cur.execute("""
     INSERT OR REPLACE INTO files
     VALUES (?,?,?,?,?,?,?)
     """,
@@ -143,7 +145,7 @@ def parse_robot_file(
     #strip the lines for parsing, but keep originals if needed for reference
     for index, line in enumerate(lines, start=1):
         raw = line.rstrip("\n")
-        parsed_cur.execute("""
+        cur.execute("""
         INSERT INTO raw_lines
         VALUES (?,?,?)
         """,
@@ -177,7 +179,7 @@ def parse_robot_file(
         if directive == "user-agent":
             if current_group is None:
                 group_number += 1
-                parsed_cur.execute("""
+                cur.execute("""
                 INSERT INTO groups(
                     fetch_id,
                     group_number
@@ -190,7 +192,7 @@ def parse_robot_file(
                 ))
 
                 current_group = cur.lastrowid
-            parsed_cur.execute("""
+            cur.execute("""
             INSERT INTO user_agents
             VALUES (?,?)
             """,
@@ -202,7 +204,7 @@ def parse_robot_file(
             if current_group is None:
                 errors += 1
                 continue
-            parsed_cur.execute("""
+            cur.execute("""
             INSERT INTO directives(
                 group_id,
                 line_number,
@@ -225,7 +227,7 @@ def parse_robot_file(
 
 
     #Done going through file, update the metadata in files
-    parsed_cur.execute("""
+    cur.execute("""
     UPDATE files
     SET
         comments=?,
@@ -240,6 +242,7 @@ def parse_robot_file(
         fetch_id
     ))
     parsed_conn.commit()
+    cur.close()
 
 #go through each row and see if they have a robots, if so parse it and add to the parsed db
 def parse_crawl_files(df):
@@ -254,14 +257,15 @@ def parse_crawl_files(df):
         )
 
 #function to go through the meta tags and then add them into the parsed set
-def parse_crawl_meta_tags(df):
+def parse_crawl_meta_tags(df, parsed_conn):
+    cur = parsed_conn.cursor()
     for row in tqdm(
         df.itertuples(),
         total=len(df)
     ):
         meta_tags = json.loads(row.meta_tags)
         for meta_tag in meta_tags:
-            parsed_cur.execute("""
+            cur.execute("""
             INSERT INTO meta_tags(
                 fetch_id,
                 meta_tag_name,
@@ -274,4 +278,4 @@ def parse_crawl_meta_tags(df):
                 meta_tag.get("name"),
                 meta_tag.get("content")
             ))
-
+    cur.close()
