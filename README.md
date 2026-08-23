@@ -1,6 +1,6 @@
 # REP_Crawler
 
-Web crawler to examine REP implementation in the top 1m web domains.
+Web crawler to examine Robots Exclusion Protocol (REP) implementation in the top 1m web domains.
 
 ## Description
 
@@ -28,7 +28,7 @@ Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify 
 
 ## Initialization
 
-### *note: This project was created to run on a Linux system, the commands listed for your OS may differ*
+Note: *This project was created to run on a Linux system, the commands listed for your OS may differ*
 
 1. Sign up for an api key to pull the TRANCO list from their [website](https://tranco-list.eu/). The email and api key will need to be added to your enviroment variables.
 

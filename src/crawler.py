@@ -53,9 +53,10 @@ def get_domain_id(conn, master_conn, domain):
         (master_domain_id,)
     )
 
+    domain_id = cur.fetchone()[0]
     master_cur.close()
     cur.close()
-    return cur.fetchone()[0]
+    return domain_id
 
 #function to check what the content type of the domain is
 def get_content_type(response):
@@ -234,7 +235,7 @@ async def fetch_robot(session, domain):
     }
 
 #function for storing data for individual domains during crawl
-async def process_domain(session, row, conn, master_conn, crawl_id):
+async def process_domain(session, row, conn, master_conn, crawl_id, robots_dir, crawl_dir):
     domain = row.domain
     rank = row.Index
     result = await fetch_robot(session, domain)
@@ -306,7 +307,9 @@ async def process_domain(session, row, conn, master_conn, crawl_id):
     if result.get("content"):
         filename = save_robot_file(
             result["content"],
-            fetch_id
+            fetch_id,
+            robots_dir,
+            crawl_dir
         )
         file_hash = sha256_text(
             result["content"]
@@ -330,7 +333,10 @@ async def process_domain(session, row, conn, master_conn, crawl_id):
     conn.commit()
 
 #function for connections and running the crawler
-async def run_crawl(df, USER_AGENT, TIMEOUT, CONCURRENCY, LIMIT_PER_HOST, conn, master_conn, crawl_id):
+async def run_crawl(
+    df, USER_AGENT, TIMEOUT, CONCURRENCY, LIMIT_PER_HOST,
+    conn, master_conn, crawl_id, robots_dir, crawl_dir
+):
     timeout = aiohttp.ClientTimeout(
         total=TIMEOUT
     )
@@ -353,17 +359,16 @@ async def run_crawl(df, USER_AGENT, TIMEOUT, CONCURRENCY, LIMIT_PER_HOST, conn, 
     ) as session:
         tasks = []
         for row in df.itertuples():
-            tasks.append(
-                ####test ouput on each domain
-                print(f"Appending domain: {row.domain} with rank: {row.Index}"),
-                process_domain(
-                    session,
-                    row,
-                    conn,
-                    master_conn,
-                    crawl_id
-                )
-            )
+            print(f"Appending domain: {row.domain} with rank: {row.Index}")
+            tasks.append(process_domain(
+                session,
+                row,
+                conn,
+                master_conn,
+                crawl_id,
+                robots_dir,
+                crawl_dir
+            ))
         await tqdm_asyncio.gather(
             *tasks
         )

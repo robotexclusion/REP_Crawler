@@ -87,16 +87,17 @@ async def main():
     prime_main_domain_db(master_conn, domains_df)
 
     print("Ready")
-    input("Execute crawl? (y/n): ")
-    if input().lower() == 'y':
-        asyncio.run_crawl(domains_df, 
+    if input("Execute crawl? (y/n): ").lower() == 'y':
+        await run_crawl(domains_df,
                         USER_AGENT, 
                         TIMEOUT, 
                         CONCURRENCY, 
                         LIMIT_PER_HOST, 
                         conn, 
                         master_conn, 
-                        crawl_id
+                        crawl_id,
+                        robots_dir,
+                        crawl_dir
                         )
     else:
         print("Crawl aborted.")
