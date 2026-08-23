@@ -8,14 +8,15 @@ Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify 
 
 ## Functions
 
-- `python main.py` runs the user agent and performs the web crawl
+- `python main.py` runs the user agent and performs the web crawl.
 - `python validation.py` runs the functions to generate and replicate random sampling for manual validation of results (i.e., through a web browser).
-- `python query.py` runs a SQLite query on the main domain file (Master list of all domains queried across all crawls)
+- `python query.py` runs a SQLite query on the main domain file (Master list of all domains queried across all crawls).
   
-- All data from the web crawls is stored in `/data`
-- `/data/domains.sqlite` stores the ID's of all domains ever queried to reference across queries
+- All data from the web crawls is stored in `/data`.
+- `/data/domains.sqlite` stores the ID's of all domains ever queried to reference across queries.
 - `/data/[number]` stores the data for individual crawls. The crawls are assigned a `crawl_id` based on the timestamp of running `main.py`.
-- `data/[number]/output` stores raw and parsed .csv outputs of the respective crawl
+- `data/[number]/robots/` stores the collected `robots.txt` files.
+- `data/[number]/output` stores raw and parsed .csv outputs of the respective crawl.
 
 ## Dependencies
 
