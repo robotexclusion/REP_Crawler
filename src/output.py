@@ -14,7 +14,7 @@ def generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path):
     cur.execute(f"ATTACH DATABASE '{parsed_db_path}' AS parsed_data")
 
     #generate crawl dataframe
-
+    
 
 
     #generate robots.txt dataframe
