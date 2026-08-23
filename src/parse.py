@@ -3,15 +3,16 @@
 #imports
 import sqlite3
 import json
+import pandas as pd
 from tqdm.auto import tqdm
 from bs4 import BeautifulSoup
 
 #function to create the parsing db file for after crawl
 def create_parser_database(parsed_db_path):
     parsed_conn = sqlite3.connect(parsed_db_path)
-    parsed_cur = parsed_conn.cursor()
+    cur = parsed_conn.cursor()
 
-    parsed_cur.execute("""
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS files (
         fetch_id INTEGER PRIMARY KEY,
         filename TEXT,
@@ -24,7 +25,7 @@ def create_parser_database(parsed_db_path):
     )
     """)
 
-    parsed_cur.execute("""
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS groups (
         group_id INTEGER PRIMARY KEY AUTOINCREMENT,
         fetch_id INTEGER,
@@ -33,7 +34,7 @@ def create_parser_database(parsed_db_path):
     )
     """)
 
-    parsed_cur.execute("""
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS user_agents (
         group_id INTEGER,
         user_agent TEXT,
@@ -41,7 +42,7 @@ def create_parser_database(parsed_db_path):
     )
     """)
 
-    parsed_cur.execute("""
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS directives (
         directive_id INTEGER PRIMARY KEY AUTOINCREMENT,
         group_id INTEGER,
@@ -54,7 +55,7 @@ def create_parser_database(parsed_db_path):
     )
     """)
 
-    parsed_cur.execute("""
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS raw_lines (
         fetch_id INTEGER,
         line_number INTEGER,
@@ -63,7 +64,7 @@ def create_parser_database(parsed_db_path):
     )
     """)
 
-    parsed_cur.execute("""
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS meta_tags (
         meta_tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
         fetch_id INTEGER,
@@ -74,8 +75,22 @@ def create_parser_database(parsed_db_path):
     """)
 
     parsed_conn.commit()
+    cur.close()
     print(f"Created parsed database at: {parsed_db_path}")
     return parsed_conn
+
+#function to fetch files form the crawl_db to return a datafram for parsing
+def fetch_files_for_parsing(crawl_conn, master_domain_db_path):
+    cur = crawl_conn.cursor()
+    cur.execute(f"ATTACH DATABASE '{master_domain_db_path}' AS master_domains")
+    cur.execute("""
+    SELECT *
+    FROM fetches
+    LEFT JOIN master_domains.domains AS md ON fetches.domain_id = md.domain_id
+    """)
+    files_df = pd.DataFrame(cur.fetchall(), columns=[description[0] for description in cur.description])
+    cur.close()
+    return files_df
 
 #function to clean the directive line
 def normalize_directive(value):
@@ -173,8 +188,6 @@ def parse_robot_file(
         directive = normalize_directive(key)
         value = value.strip()
 
-
-
         # New group
         if directive == "user-agent":
             if current_group is None:
@@ -223,8 +236,6 @@ def parse_robot_file(
                 classify_directive(directive, standard_directives),
                 raw
             ))
-
-
 
     #Done going through file, update the metadata in files
     cur.execute("""

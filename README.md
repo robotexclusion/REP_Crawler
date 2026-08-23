@@ -4,7 +4,7 @@ Web crawler to examine Robots Exclusion Protocol (REP) implementation in the top
 
 ## Description
 
-Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify the top web domains, and then queries them for Robots Exclusion Protocol (REP) implemtations aligning with [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html) , as well as \<meta\> tags in .html text defined by the [Web Robots Pages](https://www.robotstxt.org/). All data from the web crawls are stored in `/data`, and a validation script for manual verification is included.
+Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify the top web domains, and then queries them for Robots Exclusion Protocol (REP) implemtations aligning with [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html) , as well as \<meta\> tags in .html text defined by the [Web Robots Pages](https://www.robotstxt.org/). All data from the web crawls are stored in `/data`, in the form of SQLite databases and a validation script for manual verification is included.
 
 ## Functions
 
@@ -13,6 +13,7 @@ Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify 
 - All data from the web crawls is stored in `/data`
 - `/data/domains.sqlite` stores the ID's of all domains ever queried to reference across queries
 - `/data/[number]` stores the data for individual crawls. The crawls are assigned a `crawl_id` based on the timestamp of running `main.py`.
+- `query.py` contains modular code for constructing a SQLite query on the gathered data
 
 ## Dependencies
 

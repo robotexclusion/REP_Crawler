@@ -8,6 +8,7 @@ import pandas as pd
 from src.crawler import *
 from src.startup import *
 from src.parse import *
+from src.output import *
 from pathlib import Path
 from datetime import datetime
 
@@ -16,7 +17,7 @@ async def main():
     #set vars
     USER_AGENT = "REP_Research_Crawler"
     #Concurrency and timeout options to not overload ISP
-    CONCURRENCY = 750
+    CONCURRENCY = 600
     LIMIT_PER_HOST = 1
     TIMEOUT = 15
     # optional test size, set to None for unlimited/full list
@@ -64,15 +65,14 @@ async def main():
         print(f"Master domain database not found at: {master_domain_db_path}. Creating...")
         create_domain_database(master_domain_db_path)
     master_conn = sqlite3.connect(master_domain_db_path)
-    master_cur = master_conn.cursor()
 
     #create crawl db file
     print(f"Creating crawl database at: {crawl_db_path}")
     conn = create_crawl_database(crawl_db_path)
-    cur = conn.cursor()
+    # cur = conn.cursor()
 
-    # Attach the master domain database to the crawl connection
-    cur.execute(f"ATTACH DATABASE '{master_domain_db_path}' AS master_domains")
+    # # Attach the master domain database to the crawl connection
+    # cur.execute(f"ATTACH DATABASE '{master_domain_db_path}' AS master_domains")
 
     #read the tranco list file and make a dataframe of the index and domain names
     domains_df = pd.read_csv(TRANCO_FILE, header=None)
@@ -87,7 +87,11 @@ async def main():
     prime_main_domain_db(master_conn, domains_df)
 
     print("Ready")
+
+    # Execute the web crawl
     if input("Execute crawl? (y/n): ").lower() == 'y':
+        print("Crawling domains.")
+        print("This may take a while...")
         await run_crawl(domains_df,
                         USER_AGENT, 
                         TIMEOUT, 
@@ -99,26 +103,45 @@ async def main():
                         robots_dir,
                         crawl_dir
                         )
+        print("Crawl complete.")
     else:
         print("Crawl aborted.")
         return
+    # cur.close()
 
+    #parse the collected data, alinging and checking rules etc
     print("Execute parse? (y/n): ")
     if input().lower() == 'y':
+        print("Parsing data.")
         #Create the parsing db file
         parsed_conn = create_parser_database(parsed_db_path)
-        parsed_cur = parsed_conn.cursor()
+
+        #Create df of parsed files from the crawl db
+        files_df = fetch_files_for_parsing(conn, master_domain_db_path)
 
         # create new dataframes for parsing, drop nas in filename and meta
-        # filtered_files = fetches_df.dropna(subset=['filename'])
-        # filtered_meta = fetches_df.dropna(subset=['meta_tags'])
+        filtered_files = files_df.dropna(subset=['filename'])
+        filtered_meta = files_df.dropna(subset=['meta_tags'])
 
         #send the dataframe through the parsing process
-        #parse_crawl_files(filtered_files)
-        #parse_crawl_meta_tags(filtered_meta)
+        parse_crawl_files(filtered_files)
+        parse_crawl_meta_tags(filtered_meta)
+
+        print("Parsing complete.")
     else: 
-        print("Parse aborted.")
+        print("Parsing aborted.")
         return
+
+    # Output the parsed data to dataframes
+    print("Output results to crawl directory? (y/n): ")
+    if input().lower == 'y':
+        print("Building output.")
+        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path)
+        print(f"Output generated for '{crawl_id}'")
+    else:
+        print("Output aborted.")
+
+    print("Process complete. Exiting...")
 
 #run the main function
 if __name__ == "__main__":

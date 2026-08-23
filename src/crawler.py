@@ -119,8 +119,6 @@ async def fetch_robot(session, domain):
                     if "text/html" in content_type:
                         meta_tags = await check_meta_tags(response)
 
-
-
         # HTTPS failed, try HTTP
         except (
             aiohttp.ClientConnectorCertificateError,
@@ -134,8 +132,6 @@ async def fetch_robot(session, domain):
         except Exception as e:
             meta_tags_exception = str(e)
             break
-
-
 
     #check for robots.txt subdomain
     #check https and http connections
@@ -244,7 +240,7 @@ async def process_domain(session, row, conn, master_conn, crawl_id, robots_dir, 
     master_cur = master_conn.cursor()
 
     ####test output
-    print(f"Processing domain: {domain} with rank: {rank}")
+    # print(f"Processing domain: {domain} with rank: {rank}")
 
     # Insert initial metadata row
     cur.execute("""
@@ -289,7 +285,6 @@ async def process_domain(session, row, conn, master_conn, crawl_id, robots_dir, 
     ))
     fetch_id = cur.lastrowid
 
-
     #if we got any meta tag results, save them
     if result.get("meta_tags"):
         cur.execute("""
@@ -301,7 +296,6 @@ async def process_domain(session, row, conn, master_conn, crawl_id, robots_dir, 
             json.dumps(result.get("meta_tags")),
             fetch_id
         ))
-
 
     # Save robots.txt if we received one
     if result.get("content"):
@@ -359,7 +353,8 @@ async def run_crawl(
     ) as session:
         tasks = []
         for row in df.itertuples():
-            print(f"Appending domain: {row.domain} with rank: {row.Index}")
+            # test output
+            # print(f"Appending domain: {row.domain} with rank: {row.Index}")
             tasks.append(process_domain(
                 session,
                 row,
