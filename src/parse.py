@@ -82,10 +82,10 @@ def normalize_directive(value):
     return value.strip().lower()
 
 #function to chekc the directive against the standard list to see if it might be malformed or unusual
-def classify_directive(directive, STANDARD_DIRECTIVES):
+def classify_directive(directive, standard_directives):
     if directive == "user-agent":
         return "USER_AGENT"
-    if directive in STANDARD_DIRECTIVES:
+    if directive in standard_directives:
         return "STANDARD"
     return "UNKNOWN"
 
@@ -99,7 +99,7 @@ def parse_robot_file(
 ):
     cur = parsed_conn.cursor()
     #var for standard dirctives, to see if something is unusual in the files
-    STANDARD_DIRECTIVES = {
+    standard_directives = {
         "user-agent",
         "disallow",
         "allow",
@@ -220,7 +220,7 @@ def parse_robot_file(
                 index,
                 directive,
                 value,
-                classify_directive(directive, STANDARD_DIRECTIVES),
+                classify_directive(directive, standard_directives),
                 raw
             ))
 

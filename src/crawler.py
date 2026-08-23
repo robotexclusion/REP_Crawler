@@ -242,6 +242,9 @@ async def process_domain(session, row, conn, master_conn, crawl_id):
     cur = conn.cursor()
     master_cur = master_conn.cursor()
 
+    ####test output
+    print(f"Processing domain: {domain} with rank: {rank}")
+
     # Insert initial metadata row
     cur.execute("""
         INSERT INTO fetches (
@@ -351,6 +354,8 @@ async def run_crawl(df, USER_AGENT, TIMEOUT, CONCURRENCY, LIMIT_PER_HOST, conn, 
         tasks = []
         for row in df.itertuples():
             tasks.append(
+                ####test ouput on each domain
+                print(f"Appending domain: {row.domain} with rank: {row.Index}"),
                 process_domain(
                     session,
                     row,

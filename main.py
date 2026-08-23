@@ -21,10 +21,19 @@ async def main():
     TIMEOUT = 15
     # optional test size, set to None for unlimited/full list
     MAX_DOMAINS = 100
-    
+
+    print("Starting REP Crawler")
+    print(f"User Agent: {USER_AGENT}")
+    print(f"Concurrency: {CONCURRENCY}")
+    print(f"Limit per host: {LIMIT_PER_HOST}")
+    print(f"Timeout: {TIMEOUT} seconds")
+    print(f"Max domains to crawl: {MAX_DOMAINS if MAX_DOMAINS else 'Unlimited'}")
+
     #Generate a unique crawl ID
+    print("Generating crawl ID...")
     crawl_id = datetime.now().strftime("%Y%m%d%H%M")
     #Set vars for unique crawl path and sub-directories
+    print(f"Setting up directories for crawl ID: {crawl_id}")
     current_dir = Path.cwd()
     base_dir = current_dir / "data"
     crawl_dir = base_dir / crawl_id
@@ -33,11 +42,12 @@ async def main():
     output_dir = crawl_dir / "output"
     #Paths for the db files, one for raw and another for parsed, 
     #as well as a path var for the main domains db
-    master_domain_db_path = "domains.sqlite"
+    master_domain_db_path = base_dir /"domains.sqlite"
     crawl_db_path = crawl_dir / "metadata.sqlite"
     parsed_db_path = crawl_dir / "parsed.sqlite"
 
     #Make folders to for sub directories if they don't exist
+    print("Creating directory structure...")
     base_dir.mkdir(parents=True, exist_ok=True)
     crawl_dir.mkdir(parents=True, exist_ok=True)
     robots_dir.mkdir(parents=True, exist_ok=True)
@@ -45,9 +55,11 @@ async def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     #Get TRANCO
+    print("Downloading latest Tranco list...")
     TRANCO_FILE = download_latest_tranco_list(crawl_dir)
 
     #check if master database exists, if not create it
+    print(f"Checking for master domain database at: {master_domain_db_path}")
     if not os.path.exists(master_domain_db_path):
         print(f"Master domain database not found at: {master_domain_db_path}. Creating...")
         create_domain_database(master_domain_db_path)
@@ -55,6 +67,7 @@ async def main():
     master_cur = master_conn.cursor()
 
     #create crawl db file
+    print(f"Creating crawl database at: {crawl_db_path}")
     conn = create_crawl_database(crawl_db_path)
     cur = conn.cursor()
 
@@ -70,12 +83,13 @@ async def main():
         domains_df = domains_df.head(MAX_DOMAINS)
 
     #update main db file with names from the list
+    print("Updating master domain database with new domains...")
     prime_main_domain_db(master_conn, domains_df)
 
     print("Ready")
     input("Execute crawl? (y/n): ")
     if input().lower() == 'y':
-        await run_crawl(domains_df, 
+        asyncio.run_crawl(domains_df, 
                         USER_AGENT, 
                         TIMEOUT, 
                         CONCURRENCY, 

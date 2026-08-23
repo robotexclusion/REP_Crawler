@@ -5,9 +5,6 @@ import os
 import requests
 import sqlite3
 
-
-
-
 #function for getting the latest Tranco list
 def get_latest_tranco_list():
 
