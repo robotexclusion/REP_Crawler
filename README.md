@@ -21,22 +21,18 @@ All data from the web crawls is stored in `/data`.
 
 ## Dependencies
 
-- uv
-- os
-- sqlite3
-- asyncio
 - pandas
 - requests
 - tqdm
-- BeautifulSoup
+- BeautifulSoup4
 - aiohttp
 
 ## Arguments
 
 Note: *all arguments for `main.py` only*
 
-- `-h, --help` show information about program and arguments then exits
-- `-a, --autorun` skips user verification of process steps, running the entire program automatically
+- `-h, --help` shows information about program and arguments then exits.
+- `-a, --autorun` skips user verification of process steps, running the entire program automatically.
 
 ## Initialization
 

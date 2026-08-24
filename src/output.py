@@ -5,7 +5,7 @@ import sqlite3
 import pandas as pd
 from pathlib import Path
 
-#function to create and output readable dataaframs from the crawl
+#function to create and output readable dataframes from the crawl
 def generate_crawl_dataframes(
         conn, 
         master_domain_db_path, 
@@ -30,7 +30,6 @@ def generate_crawl_dataframes(
     crawl_df = pd.read_sql_query(
         """
         SELECT * from fetches,
-        master_domain_names.domain_name
         LEFT JOIN domains ON
         fetches.domain_id = domains.domain_id
         LEFT JOIN master_domains.master_domain_names ON
@@ -43,7 +42,17 @@ def generate_crawl_dataframes(
     print("Generating robots.txt file data")
     robots_df = pd.read_sql_query(
         """
-        Select * from files
+        Select domain_id, master_domain_id from fetches,
+        LEFT JOIN master_domains.master_domain_names ON
+        domains.master_domain_id = master_domain_names.master_domain_id
+        LEFT JOIN parsed_data.files ON
+        fetches.fetch_id = files.fetch_id
+        LEFT JOIN parsed_data.groups ON
+        fetches.fetch_id = groups.group_id
+        LEFT JOIN parsed_data.user_agents ON
+        groups.group_id = user_agents.group_id
+        LEFT JOIN parsed_data.directives ON
+        groups.group_id = directives.group_id
         """,
         conn
     )
@@ -52,7 +61,11 @@ def generate_crawl_dataframes(
     print("Generating meta tag data")
     meta_df = pd.read_sql_query(
         """
-        Select * from meta_tags
+        Select domain_id, master_domain_id from fetches,
+        LEFT JOIN master_domains.master_domain_names ON
+        domains.master_domain_id = master_domain_names.master_domain_id
+        LEFT JOIN parsed_data.meta_tags ON
+        fetches.fetch_id = meta_tags.meta_tag_id
         """,
         conn
     )
