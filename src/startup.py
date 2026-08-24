@@ -2,8 +2,27 @@
 
 #imports
 import os
+import argparse
 import requests
 import sqlite3
+
+#function for setting up parsing arguments
+def setup_arg_parser():
+    parser = argparse.ArgumentParser(
+        prog = "REP_Crawler", 
+        description = "Crawls domains on the TRANCO list for Robots Exclusion Protocol indicators.",
+        usage = "python main.py [options]"
+        )
+
+    #arg list and options
+    parser.add_argument("-a", "--autorun",
+                        action = "store_true",
+                        help ="Run the full main script without input."
+                        )
+
+    #parse cli args
+    args = parser.parse_args()
+    return args
 
 #function for getting the latest Tranco list
 def get_latest_tranco_list():

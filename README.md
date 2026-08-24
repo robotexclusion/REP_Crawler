@@ -30,6 +30,13 @@ Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify 
 - BeautifulSoup
 - aiohttp
 
+## Arguments
+
+Note: *all arguments for `main.py` only*
+
+- `-h, --help` show information about program and arguments then exits
+- `-a --autorun` skips user verification of process steps, running the entire program automatically
+
 ## Initialization
 
 Note: *This project was created to run on a Linux system, the commands listed for your OS may differ*
