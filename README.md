@@ -29,10 +29,17 @@ All data from the web crawls is stored in `/data`.
 
 ## Arguments
 
-Note: *all arguments for `main.py` only*
+For `main.py`:
 
 - `-h, --help` shows information about program and arguments then exits.
 - `-a, --autorun` skips user verification of process steps, running the entire program automatically.
+
+For `validation.py':
+
+- `-s [crawl id], --single [crawl id]` Generate validation for a single web crawl
+- `-m [crawl id] [crawl id], --multiple [crawl id] [crawl id]` Generate validation for multiple web crawls (useful to compare changes in results)
+- `-v [random seed], --seedvalue [random seed]` Pass a specific seed value for random sampling (Default: new seed on each validation)
+- `-n [value], --numsamples [value]` Pass a specific number of samples to generate for validation (Default: 100)
 
 ## Initialization
 

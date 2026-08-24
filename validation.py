@@ -5,6 +5,26 @@ import numpy as np
 import sqlite3
 import pandas as pd
 from pathlib import Path
+import argparse
+
+#set up args
+def setup_arg_parser():
+    parser = argparse.ArgumentParser(
+        prog = "REP_Crawler Validation",
+        description = "Generates repeatable samples of data from the REP_Crawler for validation",
+        usage = "python validation.py [options]"
+    )
+
+    #arg list and options
+    parser.add_argument("-s", "--single",
+                        help = "Generate validation for a single crawl")
+    parser.add_argument("-m", "--multiple",
+                        help = "Generate validation for multiple crawls")
+    parser.add_argument("-v", "--seedvalue",
+                        help = "Pass a seed value if needed for random sampling (Default: New seed each validation)")
+    parser.add_argument("-n", "--numsamples",
+                        help = "Pass a limit if needed for random sampling (Default: 100)")
+
 
 #main
 def main():
