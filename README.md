@@ -58,7 +58,7 @@ Navigate into the project directory:
 cd REP_Crawler
 ```
 
-Set up a virtual envrioment with uv:
+To set up a virtual envrioment with uv:
 
 ```bash
 uv venv rep_crawler
@@ -69,7 +69,17 @@ source rep_crawler/bin/activate
 ```
 
 ```bash
+uv pip install -r requirements.txt
+```
+
+```bash
 uv sync
+```
+
+Alternatively, install the requirements without a virtual enviroment:
+
+```bash
+pip install -r requirements.txt
 ```
 
 Run the main crawler:
