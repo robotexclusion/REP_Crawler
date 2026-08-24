@@ -17,8 +17,13 @@ def setup_arg_parser():
     #arg list and options
     parser.add_argument("-a", "--autorun",
                         action = "store_true",
-                        help ="Run the full main script without input."
+                        help = "Run the full main script without input."
                         )
+    parser.add_argument("-p", "--parse",
+                        help = "Skip to the parsing step for a provided crawl id."
+                        )
+    parser.add_argument("-o", "--output",
+                        help = "Skip to the output step for a provided crawl id")
 
     #parse cli args
     args = parser.parse_args()
@@ -153,3 +158,4 @@ def prime_main_domain_db(master_conn, df):
         master_conn.commit()
         cur.close()
     print(f"Primed master domain database with {len(df)} domains.")
+

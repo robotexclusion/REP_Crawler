@@ -26,6 +26,13 @@ async def main():
     # optional test size, set to None for unlimited/full list
     MAX_DOMAINS = 100
 
+    #skip options from args
+    if args.parse:
+        skip_crawl = True
+    if args.output:
+        skip_crawl = True
+        skip_parse = True
+
     print("Starting REP Crawler...")
     if args.autorun:
         print("Autorun enabled")
@@ -94,41 +101,20 @@ async def main():
     print("Ready")
 
     # Execute the web crawl
-    # autorun
-    if args.autorun:
-        print("Crawling domains.")
-        print("This may take a while...")
-        await run_crawl(domains_df,
-                        USER_AGENT, 
-                        TIMEOUT, 
-                        CONCURRENCY, 
-                        LIMIT_PER_HOST, 
-                        conn, 
-                        master_conn, 
-                        crawl_id,
-                        robots_dir,
-                        crawl_dir
-                        )
-        print("Crawl complete.")
-    #manual execution
-    elif input("Execute crawl? (y/n): ").lower() == 'y':
-        print("Crawling domains.")
-        print("This may take a while...")
-        await run_crawl(domains_df,
-                        USER_AGENT, 
-                        TIMEOUT, 
-                        CONCURRENCY, 
-                        LIMIT_PER_HOST, 
-                        conn, 
-                        master_conn, 
-                        crawl_id,
-                        robots_dir,
-                        crawl_dir
-                        )
-        print("Crawl complete.")
-    else:
-        print("Crawl aborted.")
-        return
+    if not args.skip_crawl:
+        main_crawl_func(
+            args,
+            domains_df,
+            USER_AGENT,
+            TIMEOUT,
+            CONCURRENCY,
+            LIMIT_PER_HOST,
+            conn,
+            master_conn,
+            crawl_id,
+            robots_dir,
+            crawl_dir
+            )
 
     #parse the collected data, alinging and checking rules etc
     #autorun
@@ -176,11 +162,11 @@ async def main():
     #autorun
     if args.autorun:
         print("Building output.")
-        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path, crawl_id)
+        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir)
         print("Output complete.")
     elif input("Output results to crawl directory? (y/n): ").lower == 'y':
         print("Building output.")
-        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path, crawl_id)
+        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir)
         print("Output complete.'")
     else:
         print("Output aborted.")

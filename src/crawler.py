@@ -368,3 +368,50 @@ async def run_crawl(
             *tasks
         )
 
+async def main_crawl_func(
+        args,
+        domains_df,
+        USER_AGENT,
+        TIMEOUT,
+        CONCURRENCY,
+        LIMIT_PER_HOST,
+        conn,
+        master_conn,
+        crawl_id,
+        robots_dir,
+        crawl_dir
+        ):
+    if args.autorun:
+        print("Crawling domains.")
+        print("This may take a while...")
+        await run_crawl(domains_df,
+                        USER_AGENT, 
+                        TIMEOUT, 
+                        CONCURRENCY, 
+                        LIMIT_PER_HOST, 
+                        conn, 
+                        master_conn, 
+                        crawl_id,
+                        robots_dir,
+                        crawl_dir
+                        )
+        print("Crawl complete.")
+    #manual execution
+    elif input("Execute crawl? (y/n): ").lower() == 'y':
+        print("Crawling domains.")
+        print("This may take a while...")
+        await run_crawl(domains_df,
+                        USER_AGENT, 
+                        TIMEOUT, 
+                        CONCURRENCY, 
+                        LIMIT_PER_HOST, 
+                        conn, 
+                        master_conn, 
+                        crawl_id,
+                        robots_dir,
+                        crawl_dir
+                        )
+        print("Crawl complete.")
+    else:
+        print("Crawl aborted.")
+        return
