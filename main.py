@@ -146,7 +146,7 @@ async def main():
 
         #send the dataframe through the parsing process
         parse_crawl_files(filtered_files, crawl_dir, parsed_conn)
-        parse_crawl_meta_tags(filtered_meta, crawl_dir, parsed_conn)
+        parse_crawl_meta_tags(filtered_meta, parsed_conn)
 
         print("Parsing complete.")
 
@@ -165,7 +165,7 @@ async def main():
 
         #send the dataframe through the parsing process
         parse_crawl_files(filtered_files, crawl_dir, parsed_conn)
-        parse_crawl_meta_tags(filtered_meta, crawl_dir, parsed_conn)
+        parse_crawl_meta_tags(filtered_meta, parsed_conn)
 
         print("Parsing complete.")
     else: 
