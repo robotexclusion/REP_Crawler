@@ -257,7 +257,7 @@ def parse_robot_file(
     cur.close()
 
 #go through each row and see if they have a robots, if so parse it and add to the parsed db
-def parse_crawl_files(df):
+def parse_crawl_files(df, crawl_dir, parsed_conn):
     for row in tqdm(
         df.itertuples(),
         total=len(df)
@@ -265,7 +265,9 @@ def parse_crawl_files(df):
         parse_robot_file(
             row.fetch_id,
             row.filename,
-            row.sha256
+            row.sha256,
+            crawl_dir,
+            parsed_conn
         )
 
 #function to go through the meta tags and then add them into the parsed set

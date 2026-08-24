@@ -164,8 +164,8 @@ async def main():
         filtered_meta = files_df.dropna(subset=['meta_tags'])
 
         #send the dataframe through the parsing process
-        parse_crawl_files(filtered_files)
-        parse_crawl_meta_tags(filtered_meta)
+        parse_crawl_files(filtered_files, crawl_dir, parsed_conn)
+        parse_crawl_meta_tags(filtered_meta, crawl_dir, parsed_conn)
 
         print("Parsing complete.")
     else: 
