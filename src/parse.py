@@ -86,7 +86,8 @@ def fetch_files_for_parsing(crawl_conn, master_domain_db_path):
     cur.execute("""
     SELECT *
     FROM fetches
-    LEFT JOIN master_domains.master_domain_names ON fetches.domain_id = master_domain_names.domain_id
+    LEFT JOIN master_domains.master_domain_names 
+    ON fetches.domain_id = master_domain_names.master_domain_id
     """)
     files_df = pd.DataFrame(cur.fetchall(), columns=[description[0] for description in cur.description])
     cur.close()

@@ -47,7 +47,7 @@ async def main():
     robots_dir = crawl_dir / "robots"
     meta_dir = crawl_dir / "meta"
     output_dir = crawl_dir / "output"
-    
+
     #Paths for the db files, one for raw and another for parsed, 
     #as well as a path var for the main domains db
     master_domain_db_path = base_dir /"domains.sqlite"
@@ -176,16 +176,17 @@ async def main():
     #autorun
     if args.autorun:
         print("Building output.")
-        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path)
-        print(f"Output generated for '{crawl_id}'")
+        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path, crawl_id)
+        print("Output complete.")
     elif input("Output results to crawl directory? (y/n): ").lower == 'y':
         print("Building output.")
-        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path)
-        print(f"Output generated for '{crawl_id}'")
+        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path, crawl_id)
+        print("Output complete.'")
     else:
         print("Output aborted.")
 
     print("Process complete. Exiting...")
+    return
 
 #run the main function
 if __name__ == "__main__":

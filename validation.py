@@ -26,6 +26,7 @@ def main():
             multiple_crawl_validation(seed_value, num_samples, base_dir)
         case _:
             print("Invalid option selected. Exiting.")
+    return
     
 def multiple_crawl_validation(seed_value, num_samples, base_dir):
     print(f"Random seed value: {seed_value}")
@@ -42,7 +43,7 @@ def multiple_crawl_validation(seed_value, num_samples, base_dir):
         parsed_db_path = crawl_dir / "parsed.sqlite"
 
         print(f"Gathering samples from crawl database for crawl ID: {crawl_id}")
-        crawl_db_df = pd.read_sql_query("SELECT * FROM crawl", sqlite3.connect(crawl_db_path))
+        crawl_db_df = pd.read_sql_query("SELECT * FROM fetches", sqlite3.connect(crawl_db_path))
 
         print(f"Gathering samples from parsed database for crawl ID: {crawl_id}")
         parsed_db_df = pd.read_sql_query("SELECT * FROM files", sqlite3.connect(parsed_db_path))
@@ -71,7 +72,7 @@ def single_crawl_validation(seed_value, num_samples, base_dir):
     parsed_db_path = crawl_dir / "parsed.sqlite"
 
     print("Gathering samples from crawl database")
-    crawl_db_df = pd.read_sql_query("SELECT * FROM crawl", sqlite3.connect(crawl_db_path))
+    crawl_db_df = pd.read_sql_query("SELECT * FROM fetches", sqlite3.connect(crawl_db_path))
 
     print("Gathering samples from parsed database")
     parsed_db_df = pd.read_sql_query("SELECT * FROM files", sqlite3.connect(parsed_db_path))

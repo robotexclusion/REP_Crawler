@@ -29,6 +29,7 @@ def main():
         print("Results saved to master_domains.csv")
 
     print("Process complete. Exiting...")
+    return
 
 if __name__ == "__main__":
     main()
