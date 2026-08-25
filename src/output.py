@@ -1,7 +1,6 @@
 #Holds functions related to generating useable output from the crawled data
 
 #imports
-import sqlite3
 import pandas as pd
 from pathlib import Path
 

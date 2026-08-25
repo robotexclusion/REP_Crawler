@@ -158,6 +158,3 @@ def prime_main_domain_db(master_conn, df):
         master_conn.commit()
         cur.close()
     print(f"Primed master domain database with {len(df)} domains.")
-
-def startup():
-    

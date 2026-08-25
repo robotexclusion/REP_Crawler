@@ -45,7 +45,7 @@ async def main():
     print(f"Max domains to crawl: {MAX_DOMAINS if MAX_DOMAINS else 'Unlimited'}")
 
     #Generate a unique crawl ID
-    if not skip_crawl():
+    if not skip_crawl:
         print("Generating crawl ID...")
         crawl_id = datetime.now().strftime("%Y%m%d%H%M")
 
@@ -106,7 +106,7 @@ async def main():
     print("Ready")
 
     # Execute the web crawl
-    if not args.skip_crawl:
+    if not skip_crawl:
         main_crawl_func(
             args,
             domains_df,
@@ -122,7 +122,7 @@ async def main():
             )
 
     #parse the collected data, alinging and checking rules etc
-    if not args.skip_parse:
+    if not skip_parse:
         main_parse_func(
             args,
             parsed_db_path,

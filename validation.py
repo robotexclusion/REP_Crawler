@@ -25,37 +25,41 @@ def setup_arg_parser():
     parser.add_argument("-n", "--numsamples",
                         help = "Pass a limit if needed for random sampling (Default: 100)")
 
-
 #main
 def main():
+    args = setup_arg_parser()
+
+    print("REP Crawler Validation")
+
     #vars for sampling, change to replicate a random sample
-    seed_value = np.random.randint(0, 1000000)
-    num_samples = 100
+    seed_value = args.seedvalue() if args.seedvalue() else np.random.randint(0, 1000000)
+    num_samples = args.numsumples() if args.numsamples() else 100
     np.random.seed(seed_value)
+
+    print(f"Random seed value: {seed_value}")
+    print(f"Number of samples: {num_samples}")
 
     current_dir = Path.cwd()
     base_dir = current_dir / "data"
 
-    print("REP Crawler Validation")
-    print("Type of validation to perform (1 = single crawl, 2 = multiple crawls): ")
-    validation_type = input().strip()
-    match validation_type:
-        case "1":
-            single_crawl_validation(seed_value, num_samples, base_dir)
-        case "2":
-            multiple_crawl_validation(seed_value, num_samples, base_dir)
+    num_crawls = 2 if args.multiple else 1
+
+    crawl_ids = args.multiple if args.multiple else args.single
+
+
+    match num_crawls:
+        case 1:
+            single_crawl_validation(seed_value, num_samples, base_dir, crawl_ids)
+        case 2:
+            multiple_crawl_validation(seed_value, num_samples, base_dir, crawl_ids)
         case _:
             print("Invalid option selected. Exiting.")
     return
     
-def multiple_crawl_validation(seed_value, num_samples, base_dir):
-    print(f"Random seed value: {seed_value}")
-    print(f"Number of samples: {num_samples}")
+def multiple_crawl_validation(seed_value, num_samples, base_dir, crawl_ids):
 
     #grab crawl ids for validation
-    print("Crawl IDs to validate (comma-separated list of numeric identifiers of the crawl directories): ")
-    crawl_ids_input = input().strip()
-    crawl_ids = [crawl_id.strip() for crawl_id in crawl_ids_input.split(",")]
+    crawl_ids = [crawl_id.strip() for crawl_id in crawl_ids.split(",")]
 
     for crawl_id in crawl_ids:
         crawl_dir = base_dir / crawl_id
@@ -80,13 +84,8 @@ def multiple_crawl_validation(seed_value, num_samples, base_dir):
 
         print(f"Samples saved to: {crawl_dir / crawl_sample_file_name} and {crawl_dir / parsed_sample_file_name}")
 
-def single_crawl_validation(seed_value, num_samples, base_dir):
-    print(f"Random seed value: {seed_value}")
-    print(f"Number of samples: {num_samples}")
+def single_crawl_validation(seed_value, num_samples, base_dir, crawl_id):
 
-    #grab crawl id for validation
-    print("Crawl ID to validate (numeric identifier of the crawl directory): ")
-    crawl_id = input().strip()
     crawl_dir = base_dir / crawl_id
     crawl_db_path = crawl_dir / "metadata.sqlite"
     parsed_db_path = crawl_dir / "parsed.sqlite"
@@ -108,7 +107,6 @@ def single_crawl_validation(seed_value, num_samples, base_dir):
     parsed_sample.to_csv(crawl_dir / parsed_sample_file_name, index=False)
 
     print(f"Samples saved to: {crawl_dir / crawl_sample_file_name} and {crawl_dir / parsed_sample_file_name}")
-
 
 if __name__ == "__main__":
     main()
