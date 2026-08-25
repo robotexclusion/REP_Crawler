@@ -27,13 +27,16 @@ async def main():
     MAX_DOMAINS = 100
 
     #skip options from args
+    skip_crawl = False
+    skip_parse = False
+
     if args.parse:
         skip_crawl = True
-        crawl_id = args.parse()
+        crawl_id = args.crawlid
     elif args.output:
         skip_crawl = True
         skip_parse = True
-        crawl_id = args.output()
+        crawl_id = args.crawlid
 
     print("Starting REP Crawler...")
     if args.autorun:
@@ -72,7 +75,7 @@ async def main():
     meta_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if not skip_crawl():
+    if not skip_crawl:
         #Get TRANCO
         print("Downloading latest Tranco list...")
         TRANCO_FILE = download_latest_tranco_list(crawl_dir)
@@ -86,7 +89,7 @@ async def main():
         print("Master domain database located.")
     master_conn = sqlite3.connect(master_domain_db_path)
 
-    if not skip_crawl():
+    if not skip_crawl:
         #create crawl db file
         print(f"Creating crawl database at: {crawl_db_path}")
         conn = create_crawl_database(crawl_db_path)
@@ -107,7 +110,7 @@ async def main():
 
     # Execute the web crawl
     if not skip_crawl:
-        main_crawl_func(
+        await main_crawl_func(
             args,
             domains_df,
             USER_AGENT,
@@ -128,7 +131,7 @@ async def main():
             parsed_db_path,
             master_domain_db_path,
             crawl_dir,
-            conn
+            crawl_db_path
         )
 
     # Output the parsed data to dataframes
@@ -138,7 +141,7 @@ async def main():
         parsed_db_path,
         crawl_dir,
         crawl_id,
-        conn
+        crawl_db_path
     )
 
     print("Process complete. Exiting...")

@@ -20,10 +20,15 @@ def setup_arg_parser():
                         help = "Run the full main script without input."
                         )
     parser.add_argument("-p", "--parse",
+                        action = "store_true",
                         help = "Skip to the parsing step for a provided crawl id."
                         )
     parser.add_argument("-o", "--output",
+                        action = "store_true",
                         help = "Skip to the output step for a provided crawl id")
+    parser.add_argument("-c", "--crawlid",
+                        action ="store_const",
+                        help = "crawl_id to use when skipping crawl step")
 
     #parse cli args
     args = parser.parse_args()

@@ -80,8 +80,9 @@ def create_parser_database(parsed_db_path):
     return parsed_conn
 
 #function to fetch files form the crawl_db to return a datafram for parsing
-def fetch_files_for_parsing(crawl_conn, master_domain_db_path):
-    cur = crawl_conn.cursor()
+def fetch_files_for_parsing(crawl_db_path, master_domain_db_path):
+    conn = sqlite3.connect(crawl_db_path)
+    cur = conn.cursor()
     cur.execute(f"ATTACH DATABASE '{master_domain_db_path}' AS master_domains")
     cur.execute("""
     SELECT *
@@ -90,6 +91,7 @@ def fetch_files_for_parsing(crawl_conn, master_domain_db_path):
     fetches.domain_id = master_domain_names.master_domain_id
     """)
     files_df = pd.DataFrame(cur.fetchall(), columns=[description[0] for description in cur.description])
+    cur.execute("DETACH DATABASE master_domains")
     cur.close()
     return files_df
 
@@ -299,7 +301,7 @@ def main_parse_func(
         parsed_db_path,
         master_domain_db_path,
         crawl_dir,
-        conn
+        crawl_db_path
     ):
     #autorun
     if args.autorun:
@@ -308,7 +310,7 @@ def main_parse_func(
             parsed_conn = create_parser_database(parsed_db_path)
     
             #Create df of parsed files from the crawl db
-            files_df = fetch_files_for_parsing(conn, master_domain_db_path)
+            files_df = fetch_files_for_parsing(crawl_db_path, master_domain_db_path)
     
             # create new dataframes for parsing, drop nas in filename and meta
             filtered_files = files_df.dropna(subset=['filename'])
@@ -326,7 +328,7 @@ def main_parse_func(
         parsed_conn = create_parser_database(parsed_db_path)
 
         #Create df of parsed files from the crawl db
-        files_df = fetch_files_for_parsing(conn, master_domain_db_path)
+        files_df = fetch_files_for_parsing(crawl_db_path, master_domain_db_path)
 
         # create new dataframes for parsing, drop nas in filename and meta
         filtered_files = files_df.dropna(subset=['filename'])
