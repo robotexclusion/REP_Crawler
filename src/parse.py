@@ -293,3 +293,50 @@ def parse_crawl_meta_tags(df, parsed_conn):
                 meta_tag.get("content")
             ))
     cur.close()
+
+def main_parse_func(
+        args,
+        parsed_db_path,
+        master_domain_db_path,
+        crawl_dir,
+        conn
+    ):
+    #autorun
+    if args.autorun:
+            print("Parsing data.")
+            #Create the parsing db file
+            parsed_conn = create_parser_database(parsed_db_path)
+    
+            #Create df of parsed files from the crawl db
+            files_df = fetch_files_for_parsing(conn, master_domain_db_path)
+    
+            # create new dataframes for parsing, drop nas in filename and meta
+            filtered_files = files_df.dropna(subset=['filename'])
+            filtered_meta = files_df.dropna(subset=['meta_tags'])
+    
+            #send the dataframe through the parsing process
+            parse_crawl_files(filtered_files, crawl_dir, parsed_conn)
+            parse_crawl_meta_tags(filtered_meta, parsed_conn)
+    
+            print("Parsing complete.")
+    #manual execution
+    elif input("Execute parse? (y/n): ").lower() == 'y':
+        print("Parsing data.")
+        #Create the parsing db file
+        parsed_conn = create_parser_database(parsed_db_path)
+
+        #Create df of parsed files from the crawl db
+        files_df = fetch_files_for_parsing(conn, master_domain_db_path)
+
+        # create new dataframes for parsing, drop nas in filename and meta
+        filtered_files = files_df.dropna(subset=['filename'])
+        filtered_meta = files_df.dropna(subset=['meta_tags'])
+
+        #send the dataframe through the parsing process
+        parse_crawl_files(filtered_files, crawl_dir, parsed_conn)
+        parse_crawl_meta_tags(filtered_meta, parsed_conn)
+
+        print("Parsing complete.")
+    else: 
+        print("Parsing aborted.")
+        return

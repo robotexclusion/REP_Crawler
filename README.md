@@ -33,6 +33,8 @@ For `main.py`:
 
 - `-h, --help` shows information about program and arguments then exits.
 - `-a, --autorun` skips user verification of process steps, running the entire program automatically.
+- `-p [crawl_id], --parse [crawl_id]` skips the crawl step and starts with parsing data using a given crawl_id directory
+- `-o [crawl_id], --output [crawl_id]` skips the crawl and parsing steps and starts with generating output data using a given crawl_id directory
 
 For `validation.py':
 

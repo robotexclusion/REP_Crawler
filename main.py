@@ -29,9 +29,11 @@ async def main():
     #skip options from args
     if args.parse:
         skip_crawl = True
-    if args.output:
+        crawl_id = args.parse()
+    elif args.output:
         skip_crawl = True
         skip_parse = True
+        crawl_id = args.output()
 
     print("Starting REP Crawler...")
     if args.autorun:
@@ -43,8 +45,9 @@ async def main():
     print(f"Max domains to crawl: {MAX_DOMAINS if MAX_DOMAINS else 'Unlimited'}")
 
     #Generate a unique crawl ID
-    print("Generating crawl ID...")
-    crawl_id = datetime.now().strftime("%Y%m%d%H%M")
+    if not skip_crawl():
+        print("Generating crawl ID...")
+        crawl_id = datetime.now().strftime("%Y%m%d%H%M")
 
     #Set vars for unique crawl path and sub-directories
     print(f"Setting up directories for crawl ID: {crawl_id}")
@@ -69,9 +72,10 @@ async def main():
     meta_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    #Get TRANCO
-    print("Downloading latest Tranco list...")
-    TRANCO_FILE = download_latest_tranco_list(crawl_dir)
+    if not skip_crawl():
+        #Get TRANCO
+        print("Downloading latest Tranco list...")
+        TRANCO_FILE = download_latest_tranco_list(crawl_dir)
 
     #check if master database exists, if not create it
     print(f"Checking for master domain database at: {master_domain_db_path}")
@@ -82,21 +86,22 @@ async def main():
         print("Master domain database located.")
     master_conn = sqlite3.connect(master_domain_db_path)
 
-    #create crawl db file
-    print(f"Creating crawl database at: {crawl_db_path}")
-    conn = create_crawl_database(crawl_db_path)
+    if not skip_crawl():
+        #create crawl db file
+        print(f"Creating crawl database at: {crawl_db_path}")
+        conn = create_crawl_database(crawl_db_path)
 
-    #read the tranco list file and make a dataframe of the index and domain names
-    domains_df = pd.read_csv(TRANCO_FILE, header=None)
-    domains_df.columns = ['Index','domain']
+        #read the tranco list file and make a dataframe of the index and domain names
+        domains_df = pd.read_csv(TRANCO_FILE, header=None)
+        domains_df.columns = ['Index','domain']
 
-    #if a limit was passed to MAX_DOMAINS, limit the number of domains crawled
-    if MAX_DOMAINS:
-        domains_df = domains_df.head(MAX_DOMAINS)
+        #if a limit was passed to MAX_DOMAINS, limit the number of domains crawled
+        if MAX_DOMAINS:
+            domains_df = domains_df.head(MAX_DOMAINS)
 
-    #update main db file with names from the list
-    print("Updating master domain database with new domains...")
-    prime_main_domain_db(master_conn, domains_df)
+        #update main db file with names from the list
+        print("Updating master domain database with new domains...")
+        prime_main_domain_db(master_conn, domains_df)
 
     print("Ready")
 
@@ -117,59 +122,24 @@ async def main():
             )
 
     #parse the collected data, alinging and checking rules etc
-    #autorun
-    if args.autorun:
-        print("Parsing data.")
-        #Create the parsing db file
-        parsed_conn = create_parser_database(parsed_db_path)
-
-        #Create df of parsed files from the crawl db
-        files_df = fetch_files_for_parsing(conn, master_domain_db_path)
-
-        # create new dataframes for parsing, drop nas in filename and meta
-        filtered_files = files_df.dropna(subset=['filename'])
-        filtered_meta = files_df.dropna(subset=['meta_tags'])
-
-        #send the dataframe through the parsing process
-        parse_crawl_files(filtered_files, crawl_dir, parsed_conn)
-        parse_crawl_meta_tags(filtered_meta, parsed_conn)
-
-        print("Parsing complete.")
-
-    #manual execution
-    elif input("Execute parse? (y/n): ").lower() == 'y':
-        print("Parsing data.")
-        #Create the parsing db file
-        parsed_conn = create_parser_database(parsed_db_path)
-
-        #Create df of parsed files from the crawl db
-        files_df = fetch_files_for_parsing(conn, master_domain_db_path)
-
-        # create new dataframes for parsing, drop nas in filename and meta
-        filtered_files = files_df.dropna(subset=['filename'])
-        filtered_meta = files_df.dropna(subset=['meta_tags'])
-
-        #send the dataframe through the parsing process
-        parse_crawl_files(filtered_files, crawl_dir, parsed_conn)
-        parse_crawl_meta_tags(filtered_meta, parsed_conn)
-
-        print("Parsing complete.")
-    else: 
-        print("Parsing aborted.")
-        return
+    if not args.skip_parse:
+        main_parse_func(
+            args,
+            parsed_db_path,
+            master_domain_db_path,
+            crawl_dir,
+            conn
+        )
 
     # Output the parsed data to dataframes
-    #autorun
-    if args.autorun:
-        print("Building output.")
-        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir)
-        print("Output complete.")
-    elif input("Output results to crawl directory? (y/n): ").lower == 'y':
-        print("Building output.")
-        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir)
-        print("Output complete.'")
-    else:
-        print("Output aborted.")
+    main_output_func(
+        args,
+        master_domain_db_path,
+        parsed_db_path,
+        crawl_dir,
+        crawl_id,
+        conn
+    )
 
     print("Process complete. Exiting...")
     return

@@ -79,3 +79,23 @@ def generate_crawl_dataframes(
     print(f"Output data saved for crawl '{crawl_id}' in '{crawl_dir}'")
 
     return
+
+def main_output_func(
+        args,
+        master_domain_db_path,
+        parsed_db_path,
+        crawl_dir,
+        crawl_id,
+        conn
+    ):
+    #autorun
+    if args.autorun:
+        print("Building output.")
+        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir)
+        print("Output complete.")
+    elif input("Output results to crawl directory? (y/n): ").lower == 'y':
+        print("Building output.")
+        generate_crawl_dataframes(conn, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir)
+        print("Output complete.'")
+    else:
+        print("Output aborted.")
