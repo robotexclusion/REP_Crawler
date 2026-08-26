@@ -139,7 +139,6 @@ async def main():
         args,
         master_domain_db_path,
         parsed_db_path,
-        crawl_dir,
         crawl_id,
         crawl_db_path,
         output_dir

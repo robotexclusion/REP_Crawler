@@ -11,7 +11,6 @@ def generate_crawl_dataframes(
         master_domain_db_path, 
         parsed_db_path,
         crawl_id,
-        crawl_dir,
         output_dir
         ):
     
@@ -31,11 +30,14 @@ def generate_crawl_dataframes(
     print("Generating domain data")
     crawl_df = pd.read_sql_query(
         """
-        SELECT * from fetches
+        SELECT *,
+        domains.master_domain_id,
+        master_domains.master_domain_names.domain_name
+        FROM fetches
         LEFT JOIN domains ON
         fetches.domain_id = domains.domain_id
         LEFT JOIN master_domains.master_domain_names ON
-        domains.master_domain_id = master_domain_names.master_domain_id
+        domains.master_domain_id = master_domains.master_domain_names.master_domain_id
         """,
         conn
     )
@@ -44,19 +46,36 @@ def generate_crawl_dataframes(
     print("Generating robots.txt file data")
     robots_df = pd.read_sql_query(
         """
-        Select fetches.domain_id from fetches
+        Select fetches.domain_id,
+        fetches.fetch_id,
+        domains.master_domain_id,
+        master_domains.master_domain_names.domain_name,
+        parsed_data.files.filename,
+        parsed_data.files.lines,
+        parsed_data.files.comments,
+        parsed_data.files.blank_lines,
+        parsed_data.files.parse_errors,
+        parsed_data.groups.group_id,
+        parsed_data.groups.group_number,
+        parsed_data.user_agents.user_agent,
+        parsed_data.directives.directive_id,
+        parsed_data.directives.directive,
+        parsed_data.directives.value,
+        parsed_data.directives.classification,
+        parsed_data.directives.raw
+        FROM fetches
         LEFT JOIN domains ON
         fetches.domain_id = domains.domain_id
         LEFT JOIN master_domains.master_domain_names ON
-        domains.master_domain_id = master_domain_names.master_domain_id
+        domains.master_domain_id = master_domains.master_domain_names.master_domain_id
         LEFT JOIN parsed_data.files ON
-        fetches.fetch_id = files.fetch_id
+        fetches.fetch_id = parsed_data.files.fetch_id
         LEFT JOIN parsed_data.groups ON
-        fetches.fetch_id = groups.fetch_id
+        fetches.fetch_id = parsed_data.groups.fetch_id
         LEFT JOIN parsed_data.user_agents ON
-        groups.group_id = user_agents.group_id
+        parsed_data.groups.group_id = parsed_data.user_agents.group_id
         LEFT JOIN parsed_data.directives ON
-        groups.group_id = directives.group_id
+        parsed_data.groups.group_id = parsed_data.directives.group_id
         """,
         conn
     )
@@ -65,13 +84,19 @@ def generate_crawl_dataframes(
     print("Generating meta tag data")
     meta_df = pd.read_sql_query(
         """
-        Select fetches.domain_id FROM fetches
+        Select fetches.domain_id,
+        domains.master_domain_id,
+        master_domains.master_domain_names.domain_name,
+        parsed_data.meta_tags.meta_tag_id,
+        parsed_data.meta_tags.meta_tag_name,
+        parsed_data.meta_tags.meta_tag_content
+        FROM fetches
         LEFT JOIN domains ON
         fetches.domain_id = domains.domain_id
         LEFT JOIN master_domains.master_domain_names ON
-        domains.master_domain_id = master_domain_names.master_domain_id
+        domains.master_domain_id = master_domains.master_domain_names.master_domain_id
         LEFT JOIN parsed_data.meta_tags ON
-        fetches.fetch_id = meta_tags.fetch_id
+        fetches.fetch_id = parsed_data.meta_tags.fetch_id
         """,
         conn
     )
@@ -90,7 +115,6 @@ def main_output_func(
         args,
         master_domain_db_path,
         parsed_db_path,
-        crawl_dir,
         crawl_id,
         crawl_db_path,
         output_dir
@@ -98,11 +122,11 @@ def main_output_func(
     #autorun
     if args.autorun:
         print("Building output.")
-        generate_crawl_dataframes(crawl_db_path, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir, output_dir)
+        generate_crawl_dataframes(crawl_db_path, master_domain_db_path, parsed_db_path, crawl_id, output_dir)
         print("Output complete.")
     elif input("Output results to crawl directory? (y/n): ").lower == 'y':
         print("Building output.")
-        generate_crawl_dataframes(crawl_db_path, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir, output_dir)
+        generate_crawl_dataframes(crawl_db_path, master_domain_db_path, parsed_db_path, crawl_id, output_dir)
         print("Output complete.'")
     else:
         print("Output aborted.")

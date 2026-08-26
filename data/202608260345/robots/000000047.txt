@@ -1,0 +1,122 @@
+# As a condition of accessing this website, you agree to abide by the following
+# content signals:
+
+# (a)  If a Content-Signal = yes, you may collect content for the corresponding
+#      use.
+# (b)  If a Content-Signal = no, you may not collect content for the
+#      corresponding use.
+# (c)  If the website operator does not include a Content-Signal for a
+#      corresponding use, the website operator neither grants nor restricts
+#      permission via Content-Signal with respect to the corresponding use.
+
+# The content signals and their meanings are:
+
+# search:   building a search index and providing search results (e.g., returning
+#           hyperlinks and short excerpts from your website's contents). Search does not
+#           include providing AI-generated search summaries.
+# ai-input: inputting content into one or more AI models (e.g., retrieval
+#           augmented generation, grounding, or other real-time taking of content for
+#           generative AI search answers).
+# ai-train: training or fine-tuning AI models.
+# use:      how AI systems may consume the content (immediate, reference, or full).
+
+# ANY RESTRICTIONS EXPRESSED VIA CONTENT SIGNALS ARE EXPRESS RESERVATIONS OF
+# RIGHTS UNDER ARTICLE 4 OF THE EUROPEAN UNION DIRECTIVE 2019/790 ON COPYRIGHT
+# AND RELATED RIGHTS IN THE DIGITAL SINGLE MARKET.
+
+# BEGIN Cloudflare Managed content
+
+User-agent: *
+Content-Signal: search=yes,ai-train=no,use=reference
+Allow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: CloudflareBrowserRenderingCrawler
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
+
+# END Cloudflare Managed Content
+
+user-agent: *
+
+disallow: *.ashx
+disallow: /abusereport/
+disallow: /*/abusereport/
+disallow: /admi/
+disallow: /ads/
+disallow: /catalog/contents
+disallow: /catalog/html
+disallow: /client-status
+disallow: /data/
+disallow: /error/
+disallow: /forum/
+disallow: /Forum/
+disallow: /game/report-event
+disallow: /game/report-stats
+disallow: /ide/clienttoolbox
+disallow: /javascript/
+disallow: /reports/
+disallow: /thumbnail/resolve-hash
+disallow: /thumbnail_holder/g
+disallow: /viewapp/
+disallow: /error.html
+disallow: /offline.html
+disallow: /badges/
+disallow: /*/badges/
+disallow: /*.aspx$
+disallow: /upgrades/checkout/success?giftPurchaseId=*
+disallow: /report-abuse
+disallow: /*/report-abuse
+
+Sitemap: https://www.roblox.com/sitemap.xml
+Sitemap: https://www.roblox.com/sitemap-games.xml
+Sitemap: https://www.roblox.com/sitemap-ar.xml
+Sitemap: https://www.roblox.com/sitemap-games-ar.xml
+Sitemap: https://www.roblox.com/sitemap-de.xml
+Sitemap: https://www.roblox.com/sitemap-games-de.xml
+Sitemap: https://www.roblox.com/sitemap-es.xml
+Sitemap: https://www.roblox.com/sitemap-games-es.xml
+Sitemap: https://www.roblox.com/sitemap-fr.xml
+Sitemap: https://www.roblox.com/sitemap-games-fr.xml
+Sitemap: https://www.roblox.com/sitemap-hi.xml
+Sitemap: https://www.roblox.com/sitemap-games-hi.xml
+Sitemap: https://www.roblox.com/sitemap-id.xml
+Sitemap: https://www.roblox.com/sitemap-games-id.xml
+Sitemap: https://www.roblox.com/sitemap-it.xml
+Sitemap: https://www.roblox.com/sitemap-games-it.xml
+Sitemap: https://www.roblox.com/sitemap-ja.xml
+Sitemap: https://www.roblox.com/sitemap-games-ja.xml
+Sitemap: https://www.roblox.com/sitemap-ko.xml
+Sitemap: https://www.roblox.com/sitemap-games-ko.xml
+Sitemap: https://www.roblox.com/sitemap-pl.xml
+Sitemap: https://www.roblox.com/sitemap-games-pl.xml
+Sitemap: https://www.roblox.com/sitemap-pt.xml
+Sitemap: https://www.roblox.com/sitemap-games-pt.xml
+Sitemap: https://www.roblox.com/sitemap-th.xml
+Sitemap: https://www.roblox.com/sitemap-games-th.xml
+Sitemap: https://www.roblox.com/sitemap-tr.xml
+Sitemap: https://www.roblox.com/sitemap-games-tr.xml
+Sitemap: https://www.roblox.com/sitemap-vi.xml
+Sitemap: https://www.roblox.com/sitemap-games-vi.xml
