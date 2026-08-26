@@ -294,6 +294,7 @@ def parse_crawl_meta_tags(df, parsed_conn):
                 meta_tag.get("name"),
                 meta_tag.get("content")
             ))
+    parsed_conn.commit()
     cur.close()
 
 def main_parse_func(

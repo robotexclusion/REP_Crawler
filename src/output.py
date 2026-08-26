@@ -62,7 +62,6 @@ def generate_crawl_dataframes(
         parsed_data.directives.directive,
         parsed_data.directives.value,
         parsed_data.directives.classification,
-        parsed_data.directives.raw
         FROM fetches
         LEFT JOIN domains ON
         fetches.domain_id = domains.domain_id
