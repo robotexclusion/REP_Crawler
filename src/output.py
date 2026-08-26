@@ -15,9 +15,9 @@ def generate_crawl_dataframes(
         ):
     
     #filename vars
-    crawl_df_filename = f"'{crawl_id}'_crawl_data"
-    robots_df_filename = f"'{crawl_id}'_robots.txt_data"
-    meta_df_filename = f"'{crawl_id}'_meta_tags_data"
+    crawl_df_filename = f"{crawl_id}_crawl_data"
+    robots_df_filename = f"{crawl_id}_robots.txt_data"
+    meta_df_filename = f"{crawl_id}_meta_tags_data"
 
     #attach databases
     conn = sqlite3.connect(crawl_db_path)
@@ -49,7 +49,7 @@ def generate_crawl_dataframes(
         LEFT JOIN parsed_data.files ON
         fetches.fetch_id = files.fetch_id
         LEFT JOIN parsed_data.groups ON
-        fetches.fetch_id = groups.group_id
+        fetches.fetch_id = groups.fetch_id
         LEFT JOIN parsed_data.user_agents ON
         groups.group_id = user_agents.group_id
         LEFT JOIN parsed_data.directives ON
@@ -62,11 +62,13 @@ def generate_crawl_dataframes(
     print("Generating meta tag data")
     meta_df = pd.read_sql_query(
         """
-        Select domain_id, master_domain_id from fetches
+        Select domain_id FROM fetches
+        LEFT JOIN domains ON
+        fetches.domain_id = domains.domain_id
         LEFT JOIN master_domains.master_domain_names ON
         domains.master_domain_id = master_domain_names.master_domain_id
         LEFT JOIN parsed_data.meta_tags ON
-        fetches.fetch_id = meta_tags.meta_tag_id
+        fetches.fetch_id = meta_tags.fetch_id
         """,
         conn
     )

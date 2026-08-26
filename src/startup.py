@@ -27,11 +27,17 @@ def setup_arg_parser():
                         action = "store_true",
                         help = "Skip to the output step for a provided crawl id")
     parser.add_argument("-c", "--crawlid",
-                        action ="store_const",
+                        type = str,
                         help = "crawl_id to use when skipping crawl step")
 
     #parse cli args
     args = parser.parse_args()
+
+    if (args.parse or args.output) and not args.crawlid:
+        raise ValueError(
+            "A crawl ID is required when using --parse or --output."
+        )
+
     return args
 
 #function for getting the latest Tranco list
