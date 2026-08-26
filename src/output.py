@@ -11,7 +11,8 @@ def generate_crawl_dataframes(
         master_domain_db_path, 
         parsed_db_path,
         crawl_id,
-        crawl_dir
+        crawl_dir,
+        output_dir
         ):
     
     #filename vars
@@ -43,7 +44,9 @@ def generate_crawl_dataframes(
     print("Generating robots.txt file data")
     robots_df = pd.read_sql_query(
         """
-        Select domain_id, master_domain_id from fetches
+        Select fetches.domain_id from fetches
+        LEFT JOIN domains ON
+        fetches.domain_id = domains.domain_id
         LEFT JOIN master_domains.master_domain_names ON
         domains.master_domain_id = master_domain_names.master_domain_id
         LEFT JOIN parsed_data.files ON
@@ -62,7 +65,7 @@ def generate_crawl_dataframes(
     print("Generating meta tag data")
     meta_df = pd.read_sql_query(
         """
-        Select domain_id FROM fetches
+        Select fetches.domain_id FROM fetches
         LEFT JOIN domains ON
         fetches.domain_id = domains.domain_id
         LEFT JOIN master_domains.master_domain_names ON
@@ -76,10 +79,10 @@ def generate_crawl_dataframes(
 
     #save to csv files in crawl directory
     print(f"Saving output data for crawl '{crawl_id}'")
-    crawl_df.to_csv(crawl_dir / crawl_df_filename, index=False)
-    robots_df.to_csv(crawl_dir / robots_df_filename, index=False)
-    meta_df.to_csv(crawl_dir / meta_df_filename, index=False)
-    print(f"Output data saved for crawl '{crawl_id}' in '{crawl_dir}'")
+    crawl_df.to_csv(output_dir / crawl_df_filename, index=False)
+    robots_df.to_csv(output_dir / robots_df_filename, index=False)
+    meta_df.to_csv(output_dir / meta_df_filename, index=False)
+    print(f"Output data saved for crawl '{crawl_id}' in '{output_dir}'")
 
     return
 
@@ -89,16 +92,17 @@ def main_output_func(
         parsed_db_path,
         crawl_dir,
         crawl_id,
-        crawl_db_path
+        crawl_db_path,
+        output_dir
     ):
     #autorun
     if args.autorun:
         print("Building output.")
-        generate_crawl_dataframes(crawl_db_path, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir)
+        generate_crawl_dataframes(crawl_db_path, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir, output_dir)
         print("Output complete.")
     elif input("Output results to crawl directory? (y/n): ").lower == 'y':
         print("Building output.")
-        generate_crawl_dataframes(crawl_db_path, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir)
+        generate_crawl_dataframes(crawl_db_path, master_domain_db_path, parsed_db_path, crawl_id, crawl_dir, output_dir)
         print("Output complete.'")
     else:
         print("Output aborted.")

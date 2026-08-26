@@ -141,7 +141,8 @@ async def main():
         parsed_db_path,
         crawl_dir,
         crawl_id,
-        crawl_db_path
+        crawl_db_path,
+        output_dir
     )
 
     print("Process complete. Exiting...")
