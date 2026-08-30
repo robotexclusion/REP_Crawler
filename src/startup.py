@@ -43,8 +43,8 @@ def setup_arg_parser():
 #function for getting the latest Tranco list
 def get_latest_tranco_list():
 
-    tranco_email = os.environ.get("tranco_email")
-    tranco_api_token = os.environ.get("tranco_api_token")
+    tranco_email = os.environ.get("TRANCO_EMAIL")
+    tranco_api_token = os.environ.get("TRANCO_API_TOKEN")
     tranco_api_base = "https://tranco-list.eu/api"
 
     response = requests.get(

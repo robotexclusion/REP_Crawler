@@ -9,6 +9,7 @@ from src.crawler import *
 from src.startup import *
 from src.parse import *
 from src.output import *
+from src.r2 import *
 from pathlib import Path
 from datetime import datetime
 
@@ -146,6 +147,11 @@ async def main():
 
     print("Process complete. Exiting...")
     return
+
+#pack up the data and export
+
+
+
 
 #run the main function
 if __name__ == "__main__":
