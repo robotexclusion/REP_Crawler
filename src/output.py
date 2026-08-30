@@ -49,7 +49,6 @@ def generate_crawl_dataframes(
         Select fetches.domain_id,
         fetches.fetch_id,
         domains.master_domain_id,
-        master_domains.master_domain_names.domain_name,
         parsed_data.files.filename,
         parsed_data.files.lines,
         parsed_data.files.comments,
@@ -65,8 +64,6 @@ def generate_crawl_dataframes(
         FROM fetches
         LEFT JOIN domains ON
         fetches.domain_id = domains.domain_id
-        LEFT JOIN master_domains.master_domain_names ON
-        domains.master_domain_id = master_domains.master_domain_names.master_domain_id
         LEFT JOIN parsed_data.files ON
         fetches.fetch_id = parsed_data.files.fetch_id
         LEFT JOIN parsed_data.groups ON
@@ -85,15 +82,12 @@ def generate_crawl_dataframes(
         """
         Select fetches.domain_id,
         domains.master_domain_id,
-        master_domains.master_domain_names.domain_name,
         parsed_data.meta_tags.meta_tag_id,
         parsed_data.meta_tags.meta_tag_name,
         parsed_data.meta_tags.meta_tag_content
         FROM fetches
         LEFT JOIN domains ON
         fetches.domain_id = domains.domain_id
-        LEFT JOIN master_domains.master_domain_names ON
-        domains.master_domain_id = master_domains.master_domain_names.master_domain_id
         LEFT JOIN parsed_data.meta_tags ON
         fetches.fetch_id = parsed_data.meta_tags.fetch_id
         """,

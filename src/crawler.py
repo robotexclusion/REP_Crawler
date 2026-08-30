@@ -71,9 +71,11 @@ async def check_meta_tags(response):
 
     #is html, check for robots tags
     meta_tags_search = soup.find_all(
-        "meta"
+        "meta",
         #uncomment to only pull robots tags
         # attrs={"name": lambda x: x and x.lower() in ["robots"]}
+        #uncomment to not pull da couple of meta tags they are lengthy and not related to REP
+        attrs={"name": lambda x: x and x.lower() not in ["viewport", "description", "author", "keywords"]}
     )
 
     #has tags, save them
