@@ -29,6 +29,9 @@ def setup_arg_parser():
     parser.add_argument("-c", "--crawlid",
                         type = str,
                         help = "crawl_id to use when skipping crawl step")
+    parser.add_argument("-u" "--noupload",
+                        action="store_true",
+                        help = "Don't upload the crawl data to tthe connected R2 bucket")
 
     #parse cli args
     args = parser.parse_args()

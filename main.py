@@ -30,6 +30,7 @@ async def main():
     #skip options from args
     skip_crawl = False
     skip_parse = False
+    no_upload = False
 
     if args.parse:
         skip_crawl = True
@@ -145,13 +146,13 @@ async def main():
         output_dir
     )
 
+    #pack up the data and export
+    if not no_upload:
+        upload_crawl(crawl_id, base_dir)
+
+
     print("Process complete. Exiting...")
     return
-
-#pack up the data and export
-
-
-
 
 #run the main function
 if __name__ == "__main__":

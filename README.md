@@ -4,7 +4,7 @@ Web crawler to examine Robots Exclusion Protocol (REP) implementation in the top
 
 ## Description
 
-Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify the top web domains, and then queries them for Robots Exclusion Protocol (REP) implemtations aligning with [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html) , as well as \<meta\> tags in .html text defined by the [Web Robots Pages](https://www.robotstxt.org/). All data from the web crawls are stored in `/data`, in the form of SQLite databases and a validation script for manual verification is included.
+Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify the top web domains, and then queries them for Robots Exclusion Protocol (REP) implemtations aligning with [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html) , as well as \<meta\> tags in .html text defined by the [Web Robots Pages](https://www.robotstxt.org/). All data from the web crawls are stored in `/data`, in the form of SQLite databases and a validation script for manual verification is included. At the end of the crawl, all data is uploaded to a connected CLoudFlare R2 Object Storage database. The database has a "public bucket" assigned that can be accessed with CloudFlare credentials at [repcrawler.download](http://repcrawler.download)
 
 ## Functions
 
@@ -12,7 +12,7 @@ Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify 
 - `python validation.py` runs the functions to generate and replicate random sampling for manual validation of results (i.e., through a web browser).
 - `python query.py` runs a SQLite query on the main domain file (Master list of all domains queried across all crawls).
   
-All data from the web crawls is stored in `/data`.
+All data from the web crawls is stored in `/data`. After the parsing and output functions complete, `main.py` passes the new databases and crawled robots.txt files through gzip compression and uploads them to a connected CloudFlare R2 Object Storage database. 
 
 - `/data/domains.sqlite` stores the ID's of all domains ever queried to reference across queries.
 - `/data/[number]` stores the data for individual crawls. The crawls are assigned a `crawl_id` based on the timestamp of running `main.py`.
@@ -26,6 +26,7 @@ All data from the web crawls is stored in `/data`.
 - tqdm
 - BeautifulSoup4
 - aiohttp
+- boto3
 
 ## Arguments
 
@@ -35,6 +36,7 @@ For `main.py`:
 - `-a, --autorun` skips user verification of process steps, running the entire program automatically.
 - `-p [crawl_id], --parse [crawl_id]` skips the crawl step and starts with parsing data using a given crawl_id directory
 - `-o [crawl_id], --output [crawl_id]` skips the crawl and parsing steps and starts with generating output data using a given crawl_id directory
+- `-u, --noupload` skip uploading the crawl data to the connected R2 bucket
 
 For `validation.py':
 
