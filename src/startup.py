@@ -193,6 +193,8 @@ def create_crawl_database(crawl_db_path):
         meta_tags_last_exception TEXT,
         meta_tags_error TEXT,
         meta_tags_exception TEXT,
+        policy_hash TEXT,
+        truncated INTEGER NOT NULL DEFAULT 0,
         completed INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (crawl_id) REFERENCES crawl(crawl_id),
         FOREIGN KEY (domain_id) REFERENCES domains(domain_id)
@@ -205,6 +207,8 @@ def create_crawl_database(crawl_db_path):
         ("crawl", "completed_domains", "INTEGER DEFAULT 0"),
         ("crawl", "checkpointed_at", "TEXT"),
         ("fetches", "completed", "INTEGER NOT NULL DEFAULT 0"),
+        ("fetches", "policy_hash", "TEXT"),
+        ("fetches", "truncated", "INTEGER NOT NULL DEFAULT 0"),
     ):
         columns = {row[1] for row in cur.execute(f"PRAGMA table_info({table})")}
         if column not in columns:

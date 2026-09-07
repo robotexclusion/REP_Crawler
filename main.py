@@ -170,6 +170,9 @@ async def main():
         output_dir
     )
 
+    master_domains_csv_path = base_dir / "master_domains.csv"
+    dump_master_domains_csv(master_domain_db_path, master_domains_csv_path)
+
     #pack up the data and export
     if not no_upload:
         upload_crawl(crawl_id, base_dir)

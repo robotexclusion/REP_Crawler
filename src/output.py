@@ -2,8 +2,10 @@
 
 #imports
 import csv
+import json
 from pathlib import Path
 import sqlite3
+
 
 def write_query_csv(connection, query, output_path):
     cursor = connection.execute(query)
@@ -13,15 +15,28 @@ def write_query_csv(connection, query, output_path):
         while rows := cursor.fetchmany(10000):
             writer.writerows(rows)
 
+
+def dump_master_domains_csv(master_domain_db_path, output_path):
+    conn = sqlite3.connect(master_domain_db_path)
+    query = """
+        SELECT master_domain_id, domain_name
+        FROM master_domain_names
+        ORDER BY master_domain_id
+    """
+    write_query_csv(conn, query, output_path)
+    conn.close()
+    return output_path
+
+
 #function to create and output readable dataframes from the crawl
 def generate_crawl_dataframes(
         crawl_db_path,
-        master_domain_db_path, 
+        master_domain_db_path,
         parsed_db_path,
         crawl_id,
         output_dir
         ):
-    
+
     #filename vars
     crawl_df_filename = f"{crawl_id}_crawl_data.csv"
     robots_df_filename = f"{crawl_id}_robotstxt_data.csv"
@@ -37,13 +52,34 @@ def generate_crawl_dataframes(
     # Stream each result directly to CSV instead of materializing it in pandas.
     print("Generating domain data")
     crawl_query = """
-        SELECT fetches.*,
-        domains.master_domain_id,
-        master_domains.master_domain_names.domain_name
+        SELECT
+            fetches.fetch_id,
+            fetches.crawl_id,
+            fetches.domain_id,
+            fetches.tranco_rank,
+            fetches.timestamp,
+            fetches.status_code,
+            fetches.result,
+            fetches.protocol,
+            fetches.response_time_ms,
+            fetches.filename,
+            fetches.bytes,
+            fetches.sha256,
+            fetches.exception,
+            fetches.content_type,
+            fetches.meta_tags_response_status,
+            fetches.meta_tags_last_exception,
+            fetches.meta_tags_error,
+            fetches.meta_tags_exception,
+            fetches.policy_hash,
+            fetches.truncated,
+            fetches.completed,
+            domains.master_domain_id,
+            master_domains.master_domain_names.domain_name
         FROM fetches
         LEFT JOIN domains ON fetches.domain_id = domains.domain_id
         LEFT JOIN master_domains.master_domain_names ON
-        domains.master_domain_id = master_domains.master_domain_names.master_domain_id
+            domains.master_domain_id = master_domains.master_domain_names.master_domain_id
     """
     write_query_csv(conn, crawl_query, output_dir / crawl_df_filename)
 
@@ -69,22 +105,50 @@ def generate_crawl_dataframes(
     write_query_csv(conn, robots_query, output_dir / robots_df_filename)
 
     print("Generating meta tag data")
-    meta_query = """
-        SELECT fetches.domain_id,
-        domains.master_domain_id,
-        parsed_data.meta_tags.meta_tag_id,
-        parsed_data.meta_tags.meta_tag_name,
-        parsed_data.meta_tags.meta_tag_content
+    meta_rows_query = """
+        SELECT
+            fetches.fetch_id,
+            fetches.domain_id,
+            domains.master_domain_id,
+            fetches.meta_tags
         FROM fetches
         LEFT JOIN domains ON fetches.domain_id = domains.domain_id
-        LEFT JOIN parsed_data.meta_tags ON fetches.fetch_id = parsed_data.meta_tags.fetch_id
+        WHERE fetches.meta_tags IS NOT NULL
     """
-    write_query_csv(conn, meta_query, output_dir / meta_df_filename)
+    with open(output_dir / meta_df_filename, "w", encoding="utf-8", newline="") as output:
+        writer = csv.writer(output)
+        writer.writerow([
+            "fetch_id",
+            "domain_id",
+            "master_domain_id",
+            "meta_tag_name",
+            "meta_tag_content",
+            "meta_tag_ordinal"
+        ])
+        for fetch_id, domain_id, master_domain_id, meta_tags_json in conn.execute(meta_rows_query):
+            try:
+                meta_tags = json.loads(meta_tags_json)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(meta_tags, list):
+                continue
+            for ordinal, tag in enumerate(meta_tags, start=1):
+                if not isinstance(tag, dict):
+                    continue
+                writer.writerow([
+                    fetch_id,
+                    domain_id,
+                    master_domain_id,
+                    tag.get("name"),
+                    tag.get("content"),
+                    ordinal,
+                ])
     cur.close()
 
     print(f"Saving output data for crawl '{crawl_id}'")
     print(f"Output data saved for crawl '{crawl_id}' in '{output_dir}'")
     return
+
 
 def main_output_func(
         args,

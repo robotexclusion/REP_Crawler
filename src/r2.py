@@ -151,7 +151,16 @@ def download_data(r2_path, output_path):
 
 #uplaod a specified crawl
 def upload_crawl(crawl_id, base_dir):
-    crawl_dir = Path(base_dir) / crawl_id
+    try:
+        get_r2_client()
+    except RuntimeError as exc:
+        raise RuntimeError(
+            "R2 upload skipped: missing Cloudflare R2 environment variables. "
+            f"Details: {exc}"
+        ) from exc
+
+    base_dir = Path(base_dir)
+    crawl_dir = base_dir / crawl_id
 
     if not crawl_dir.exists():
         raise FileNotFoundError(
@@ -161,19 +170,22 @@ def upload_crawl(crawl_id, base_dir):
     # R2 directory for this crawl
     r2_prefix = f"crawls/{crawl_id}"
 
-    # Upload durable metadata and tabular output. Raw robots files are no
-    # longer created by new crawls.
-    csv_files = list(crawl_dir.glob("*.csv"))
-    sqlite_files = list(crawl_dir.glob("*.sqlite"))
+    files_to_upload = []
+    files_to_upload.extend(crawl_dir.rglob("*.csv"))
+    files_to_upload.extend(crawl_dir.rglob("*.sqlite"))
+    files_to_upload.extend(base_dir.glob("*.csv"))
+    files_to_upload.extend(base_dir.glob("*.sqlite"))
 
-    for data_file in csv_files + sqlite_files:
+    seen = set()
+    for data_file in files_to_upload:
+        if not data_file.is_file() or data_file in seen:
+            continue
+        seen.add(data_file)
 
         compressed_file = compress_data(data_file)
-
-        r2_path = (
-            f"{r2_prefix}/"
-            f"{compressed_file.name}"
-        )
+        r2_path = f"{r2_prefix}/{compressed_file.name}"
+        if data_file.parent == base_dir:
+            r2_path = f"{r2_prefix}/master/{compressed_file.name}"
 
         upload_data(compressed_file, r2_path)
         compressed_file.unlink()

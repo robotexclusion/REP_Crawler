@@ -3,7 +3,7 @@
 #imports
 import aiohttp
 import asyncio
-import hashlib
+import re
 import time
 import json
 import os
@@ -14,27 +14,74 @@ from src.parse import StreamingRobotParser
 from src.startup import checkpoint_crawl
 
 MAX_ROBOTS_BYTES = int(os.environ.get("REP_MAX_ROBOTS_BYTES", 8 * 1024 * 1024))
-MAX_HTML_BYTES = 2 * 1024 * 1024
+MAX_HTML_BYTES = int(os.environ.get("REP_MAX_HTML_BYTES", 2 * 1024 * 1024))
+MAX_META_TAGS = int(os.environ.get("REP_MAX_META_TAGS", 200))
+MAX_META_TAG_VALUE_BYTES = int(os.environ.get("REP_MAX_META_TAG_VALUE_BYTES", 8192))
 
-#utf-8 decoding for text parsing
-def sha256_text(text):
 
-    return hashlib.sha256(
-        text.encode("utf-8")
-    ).hexdigest()
+def _truncate_meta_value(value, limit):
+    if value is None:
+        return None
+    text = str(value)
+    if len(text.encode("utf-8")) <= limit:
+        return text
+    trimmed = text.encode("utf-8")[: limit - 3].decode("utf-8", errors="ignore")
+    return trimmed + "..."
 
-#functrion to save and name the captured robots files with unique identifiers
-def save_robot_file(content, fetch_id, robots_dir, crawl_dir):
 
-    #give the file a unique id based off the fetch number
-    filename = f"{fetch_id:09d}.txt"
+def _parse_meta_robots_value(value):
+    raw = (value or "").strip()
+    if not raw:
+        return {
+            "raw": "",
+            "rules": [],
+            "malformed": False,
+            "warning": "Empty robots meta tag."
+        }
 
-    #setr the path under the current crawl and write the file into the new text file
-    path = robots_dir / filename
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(content)
+    normalized = re.sub(r"\s+", " ", raw).strip()
+    rule_tokens = [token.strip().lower() for token in re.split(r"[,\s]+", normalized) if token.strip()]
+    known_rules = {
+        "index", "noindex", "follow", "nofollow", "all", "none",
+        "noarchive", "nosnippet", "notranslate", "noimageindex",
+        "max-snippet", "max-image-preview", "max-video-preview",
+        "unavailable_after"
+    }
 
-    return str(path.relative_to(crawl_dir))
+    malformed = False
+    bad_tokens = []
+    for token in rule_tokens:
+        if not token:
+            continue
+        if token.startswith("max-"):
+            if token.split("-", 2)[-1].startswith("snippet"):
+                continue
+        if token.startswith("max-"):
+            if token.endswith(("snippet", "image-preview", "video-preview")):
+                continue
+        if token.startswith("unavailable_after"):
+            continue
+        if token not in known_rules:
+            bad_tokens.append(token)
+
+    if not rule_tokens or bad_tokens:
+        malformed = True
+
+    if "index" in rule_tokens and "noindex" in rule_tokens:
+        malformed = True
+    if "follow" in rule_tokens and "nofollow" in rule_tokens:
+        malformed = True
+
+    return {
+        "raw": raw,
+        "rules": rule_tokens,
+        "malformed": malformed,
+        "warning": (
+            "Malformed robots meta-tag rules detected."
+            if malformed else None
+        ),
+        "unknown_tokens": bad_tokens
+    }
 
 #function to grab domain IDs for the crawl
 def get_domain_id(conn, master_conn, domain):
@@ -78,28 +125,39 @@ async def check_meta_tags(response):
     html = html_bytes.decode(response.charset or "utf-8", errors="ignore")
     soup = BeautifulSoup(html, "html.parser")
 
-    #is html, check for robots tags
-    meta_tags_search = soup.find_all(
-        "meta",
-        #uncomment to only pull robots tags
-        # attrs={"name": lambda x: x and x.lower() in ["robots"]}
-        #uncomment to not pull da couple of meta tags they are lengthy and not related to REP
-        attrs={"name": lambda x: x and x.lower() not in ["viewport", "description", "author", "keywords"]}
-    )
+    meta_tags_search = soup.find_all("meta")
+    if not meta_tags_search:
+        return None
 
-    #has tags, save them
-    if meta_tags_search:
-        meta_tags = [
-            {
-                "name": tag.get("name"),
-                "content": tag.get("content")
-            }
-            for tag in meta_tags_search
-        ]
-        return meta_tags
+    meta_tags = []
+    for ordinal, tag in enumerate(meta_tags_search, start=1):
+        if len(meta_tags) >= MAX_META_TAGS:
+            break
 
-    #no tags, return none
-    return None
+        name = (tag.get("name") or "").strip()
+        content = tag.get("content")
+        if content is None:
+            content = ""
+        content = _truncate_meta_value(content, MAX_META_TAG_VALUE_BYTES)
+
+        record = {
+            "ordinal": ordinal,
+            "name": name,
+            "content": content,
+            "is_robots_tag": name.lower() == "robots"
+        }
+
+        if name.lower() == "robots":
+            parsed = _parse_meta_robots_value(content)
+            record["robots_rules"] = parsed["rules"]
+            record["robots_malformed"] = parsed["malformed"]
+            record["robots_warning"] = parsed["warning"]
+            record["robots_unknown_tokens"] = parsed["unknown_tokens"]
+            record["robots_raw"] = parsed["raw"]
+
+        meta_tags.append(record)
+
+    return meta_tags
 
 #connect to domain for robots.txt with error handling
 async def fetch_robot(session, domain, on_robot_chunk=None):
@@ -254,6 +312,8 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
         "content": None,
         "time": None,
         "exception": str(last_exception) if last_exception else None,
+        "robot_bytes": 0,
+        "robot_truncated": False,
         "meta_tags": meta_tags,
         "meta_tags_response_status": meta_tags_response_status,
         "meta_tags_last_exception": meta_tags_last_exception,
@@ -284,10 +344,6 @@ async def process_domain(session, row, conn, master_conn, parsed_conn, crawl_id,
 
     result = await fetch_robot(session, domain, consume_robot_chunk)
 
-    ####test output
-    # print(f"Processing domain: {domain} with rank: {rank}")
-
-    # Complete the checkpoint row only after network work is finished.
     cur.execute("""
         UPDATE fetches SET
             status_code = ?,
@@ -316,8 +372,9 @@ async def process_domain(session, row, conn, master_conn, parsed_conn, crawl_id,
         json.dumps(result.get("meta_tags")) if result.get("meta_tags") else None,
         fetch_id
     ))
+
     if robot_parser is not None:
-        file_hash, size = robot_parser.finish(
+        raw_hash, policy_hash, byte_count, error_count = robot_parser.finish(
             result.get("robot_truncated", False)
             or result.get("result") != "SUCCESS"
         )
@@ -325,14 +382,25 @@ async def process_domain(session, row, conn, master_conn, parsed_conn, crawl_id,
             UPDATE fetches
             SET
                 sha256 = ?,
-                bytes = ?
+                bytes = ?,
+                policy_hash = ?,
+                truncated = ?,
+                completed = 1
             WHERE fetch_id = ?
         """, (
-            file_hash,
-            size,
+            raw_hash,
+            byte_count,
+            policy_hash,
+            int(result.get("robot_truncated", False)),
             fetch_id
         ))
-    cur.execute("UPDATE fetches SET completed=1 WHERE fetch_id=?", (fetch_id,))
+    else:
+        cur.execute(
+            "UPDATE fetches SET completed=1 WHERE fetch_id=?",
+            (fetch_id,)
+        )
+
+    conn.commit()
     checkpoint_crawl(conn, crawl_id, rank)
 
 #function for connections and running the crawler
