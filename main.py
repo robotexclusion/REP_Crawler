@@ -73,8 +73,7 @@ async def main():
     crawl_dir = base_dir / crawl_id
     output_dir = crawl_dir / "output"
 
-    #Paths for the db files, one for raw and another for parsed, 
-    #as well as a path var for the main domains db
+    #Paths for the crawl databases and the main domains db
     master_domain_db_path = base_dir /"domains.sqlite"
     crawl_db_path = crawl_dir / "metadata.sqlite"
     parsed_db_path = crawl_dir / "parsed.sqlite"

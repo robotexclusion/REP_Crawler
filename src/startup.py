@@ -82,7 +82,6 @@ def get_latest_tranco_list():
 #grab the latest Tranco list, download and save in the crawl dir
 def download_latest_tranco_list(crawl_dir):
     tranco_info = get_latest_tranco_list()
-    tranco_list_id = tranco_info["list_id"]
     tranco_download_url = tranco_info["download"]
     tranco_file_name = "tranco_list_" + tranco_info["created_on"] + ".csv"
     tranco_file = crawl_dir / tranco_file_name

@@ -28,7 +28,7 @@ def dump_master_domains_csv(master_domain_db_path, output_path):
     return output_path
 
 
-#function to create and output readable dataframes from the crawl
+#function to create and output readable csv files from the crawl
 def generate_crawl_dataframes(
         crawl_db_path,
         master_domain_db_path,
