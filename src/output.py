@@ -123,7 +123,13 @@ def generate_crawl_dataframes(
             "master_domain_id",
             "meta_tag_name",
             "meta_tag_content",
-            "meta_tag_ordinal"
+            "meta_tag_ordinal",
+            "is_robots_tag",
+            "robots_rules",
+            "robots_malformed",
+            "robots_warning",
+            "robots_unknown_tokens",
+            "robots_raw",
         ])
         for fetch_id, domain_id, master_domain_id, meta_tags_json in conn.execute(meta_rows_query):
             try:
@@ -142,6 +148,12 @@ def generate_crawl_dataframes(
                     tag.get("name"),
                     tag.get("content"),
                     ordinal,
+                    tag.get("is_robots_tag", False),
+                    json.dumps(tag.get("robots_rules", [])),
+                    tag.get("robots_malformed", False),
+                    tag.get("robots_warning"),
+                    json.dumps(tag.get("robots_unknown_tokens", [])),
+                    tag.get("robots_raw"),
                 ])
     cur.close()
 

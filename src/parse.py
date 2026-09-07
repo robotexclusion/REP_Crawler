@@ -52,13 +52,6 @@ def create_parser_database(parsed_db_path):
             value TEXT,
             message TEXT NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS meta_tags (
-            meta_tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            fetch_id INTEGER NOT NULL,
-            meta_tag_name TEXT,
-            meta_tag_content TEXT,
-            ordinal INTEGER NOT NULL
-        );
     """)
     connection.commit()
     return connection

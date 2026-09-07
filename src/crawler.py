@@ -17,6 +17,7 @@ MAX_ROBOTS_BYTES = int(os.environ.get("REP_MAX_ROBOTS_BYTES", 8 * 1024 * 1024))
 MAX_HTML_BYTES = int(os.environ.get("REP_MAX_HTML_BYTES", 2 * 1024 * 1024))
 MAX_META_TAGS = int(os.environ.get("REP_MAX_META_TAGS", 200))
 MAX_META_TAG_VALUE_BYTES = int(os.environ.get("REP_MAX_META_TAG_VALUE_BYTES", 8192))
+MAX_META_TOTAL_BYTES = int(os.environ.get("REP_MAX_META_TOTAL_BYTES", 8192))
 
 
 def _truncate_meta_value(value, limit):
@@ -130,6 +131,7 @@ async def check_meta_tags(response):
         return None
 
     meta_tags = []
+    retained_bytes = 0
     for ordinal, tag in enumerate(meta_tags_search, start=1):
         if len(meta_tags) >= MAX_META_TAGS:
             break
@@ -155,7 +157,11 @@ async def check_meta_tags(response):
             record["robots_unknown_tokens"] = parsed["unknown_tokens"]
             record["robots_raw"] = parsed["raw"]
 
+        record_bytes = len(json.dumps(record, ensure_ascii=False).encode("utf-8"))
+        if retained_bytes + record_bytes > MAX_META_TOTAL_BYTES:
+            break
         meta_tags.append(record)
+        retained_bytes += record_bytes
 
     return meta_tags
 
@@ -322,7 +328,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
     }
 
 #function for storing data for individual domains during crawl
-async def process_domain(session, row, conn, master_conn, parsed_conn, crawl_id, robots_dir, crawl_dir):
+async def process_domain(session, row, conn, master_conn, parsed_conn, crawl_id):
     domain = row.domain
     rank = row.Index
     domain_id = get_domain_id(conn, master_conn, domain)
@@ -374,7 +380,7 @@ async def process_domain(session, row, conn, master_conn, parsed_conn, crawl_id,
     ))
 
     if robot_parser is not None:
-        raw_hash, policy_hash, byte_count, error_count = robot_parser.finish(
+        raw_hash, policy_hash, byte_count, _ = robot_parser.finish(
             result.get("robot_truncated", False)
             or result.get("result") != "SUCCESS"
         )
@@ -406,7 +412,7 @@ async def process_domain(session, row, conn, master_conn, parsed_conn, crawl_id,
 #function for connections and running the crawler
 async def run_crawl(
     df, USER_AGENT, TIMEOUT, CONCURRENCY, LIMIT_PER_HOST,
-    conn, master_conn, parsed_conn, crawl_id, robots_dir, crawl_dir
+    conn, master_conn, parsed_conn, crawl_id
 ):
     timeout = aiohttp.ClientTimeout(
         total=TIMEOUT
@@ -433,7 +439,7 @@ async def run_crawl(
         for row in df:
             batch.append(process_domain(
                 session, row, conn, master_conn, parsed_conn,
-                crawl_id, robots_dir, crawl_dir
+                crawl_id
             ))
             if len(batch) >= batch_size:
                 await tqdm_asyncio.gather(*batch)
@@ -452,8 +458,6 @@ async def main_crawl_func(
         master_conn,
         parsed_conn,
         crawl_id,
-        robots_dir,
-        crawl_dir
         ):
     if args.autorun:
         print("Crawling domains.")
@@ -466,9 +470,7 @@ async def main_crawl_func(
                         conn, 
                         master_conn, 
                         parsed_conn,
-                        crawl_id,
-                        robots_dir,
-                        crawl_dir
+                        crawl_id
                         )
         print("Crawl complete.")
     #manual execution
@@ -483,9 +485,7 @@ async def main_crawl_func(
                         conn, 
                         master_conn, 
                         parsed_conn,
-                        crawl_id,
-                        robots_dir,
-                        crawl_dir
+                        crawl_id
                         )
         print("Crawl complete.")
     else:

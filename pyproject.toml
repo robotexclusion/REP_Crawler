@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.scripts]
-rep-crawler = "rep_crawler:main"
+rep-crawler = "main:cli"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]

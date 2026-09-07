@@ -4,12 +4,23 @@
 import os
 import sqlite3
 import asyncio
-import pandas as pd
-from src.crawler import *
-from src.startup import *
-from src.parse import *
-from src.output import *
-from src.r2 import *
+from src.crawler import main_crawl_func
+from src.startup import (
+    completed_ranks,
+    create_crawl_database,
+    create_domain_database,
+    discard_incomplete_fetches,
+    download_latest_tranco_list,
+    finish_crawl,
+    iter_pending_tranco_domains,
+    iter_tranco_domains,
+    prime_main_domain_db,
+    setup_arg_parser,
+    start_crawl,
+)
+from src.parse import create_parser_database
+from src.output import dump_master_domains_csv, main_output_func
+from src.r2 import upload_crawl
 from pathlib import Path
 from datetime import datetime
 from types import SimpleNamespace
@@ -30,17 +41,12 @@ async def main():
 
     #skip options from args
     skip_crawl = False
-    skip_parse = False
     no_upload = False
 
     if args.resume:
         crawl_id = args.crawlid
-    elif args.parse:
-        skip_crawl = True
-        crawl_id = args.crawlid
     elif args.output:
         skip_crawl = True
-        skip_parse = True
         crawl_id = args.crawlid
 
     if args.noupload:
@@ -65,8 +71,6 @@ async def main():
     current_dir = Path.cwd()
     base_dir = current_dir / "data"
     crawl_dir = base_dir / crawl_id
-    robots_dir = crawl_dir / "robots"
-    meta_dir = crawl_dir / "meta"
     output_dir = crawl_dir / "output"
 
     #Paths for the db files, one for raw and another for parsed, 
@@ -79,8 +83,6 @@ async def main():
     print("Creating directory structure...")
     base_dir.mkdir(parents=True, exist_ok=True)
     crawl_dir.mkdir(parents=True, exist_ok=True)
-    robots_dir.mkdir(parents=True, exist_ok=True)
-    meta_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if not skip_crawl and not args.resume:
@@ -144,21 +146,9 @@ async def main():
             conn,
             master_conn,
             parsed_conn,
-            crawl_id,
-            robots_dir,
-            crawl_dir
+            crawl_id
             )
         finish_crawl(conn, crawl_id)
-
-    #parse the collected data, alinging and checking rules etc
-    if skip_crawl and not skip_parse:
-        main_parse_func(
-            args,
-            parsed_db_path,
-            master_domain_db_path,
-            crawl_dir,
-            crawl_db_path
-        )
 
     # Output the parsed data to dataframes
     main_output_func(
@@ -182,5 +172,9 @@ async def main():
     return
 
 #run the main function
+def cli():
+    asyncio.run(main())
+
+
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    cli()

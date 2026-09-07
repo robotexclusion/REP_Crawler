@@ -27,13 +27,9 @@ def setup_arg_parser():
                         action = "store_true",
                         help = "Run the full main script without input."
                         )
-    parser.add_argument("-p", "--parse",
-                        action = "store_true",
-                        help = "Skip to the parsing step for a provided crawl id."
-                        )
     parser.add_argument("-o", "--output",
                         action = "store_true",
-                        help = "Skip to the output step for a provided crawl id")
+                        help = "Skip crawling and generate output for a given crawl ID.")
     parser.add_argument("-c", "--crawlid",
                         type = str,
                         help = "crawl_id to use when skipping crawl step")
@@ -51,13 +47,13 @@ def setup_arg_parser():
     #parse cli args
     args = parser.parse_args()
 
-    if (args.parse or args.output or args.resume) and not args.crawlid:
+    if (args.output or args.resume) and not args.crawlid:
         raise ValueError(
-            "A crawl ID is required when using --parse, --output, or --resume."
+            "A crawl ID is required when using --output or --resume."
         )
 
-    if args.resume and (args.parse or args.output):
-        raise ValueError("--resume cannot be combined with --parse or --output.")
+    if args.resume and args.output:
+        raise ValueError("--resume cannot be combined with --output.")
 
     return args
 
@@ -262,11 +258,7 @@ def discard_incomplete_fetches(conn, parsed_conn, crawl_id):
         )
     ]
     for fetch_id in fetch_ids:
-        for table, column in (
-            ("meta_tags", "fetch_id"),
-            ("raw_lines", "fetch_id"),
-            ("files", "fetch_id"),
-        ):
+        for table, column in (("files", "fetch_id"),):
             parsed_conn.execute(
                 f"DELETE FROM {table} WHERE {column}=?",
                 (fetch_id,)

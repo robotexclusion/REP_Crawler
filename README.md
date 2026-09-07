@@ -35,19 +35,33 @@ For `main.py`:
 
 - `-h, --help` shows information about program and arguments then exits.
 - `-a, --autorun` skips user verification of process steps, running the entire program automatically.
-- `-p [crawl_id], --parse [crawl_id]` skips the crawl step and starts with parsing data using a given crawl_id directory
-- `-o [crawl_id], --output [crawl_id]` skips the crawl and parsing steps and starts with generating output data using a given crawl_id directory
-- `-c [crawl_id], --crawlid [crawl_id]` provides the crawl ID when using parse, output, or resume options
+- `-o [crawl_id], --output [crawl_id]` skips crawling and generates output data using a given crawl ID directory. Robots and meta-tag parsing happen during the crawl.
+- `-c [crawl_id], --crawlid [crawl_id]` provides the crawl ID when using output or resume options
 - `-u, --noupload` skip uploading the crawl data to the connected R2 bucket
 - `--max-domains [value]` limits the number of domains in a crawl. The default is 100, and `0` runs the full Tranco list
 - `--resume` resumes an interrupted crawl using its saved Tranco snapshot. This option requires `--crawlid`
 
-For `validation.py':
+For `validation.py`:
 
-- `-s [crawl id], --single [crawl id]` Generate validation for a single web crawl
-- `-m [crawl id] [crawl id], --multiple [crawl id] [crawl id]` Generate validation for multiple web crawls (useful to compare changes in results)
-- `-v [random seed], --seedvalue [random seed]` Pass a specific seed value for random sampling (Default: new seed on each validation)
-- `-n [value], --numsamples [value]` Pass a specific number of samples to generate for validation (Default: 100)
+- `-s [crawl id], --single [crawl id]` generates a validation sample for one web crawl.
+- `-m [crawl id] [crawl id] ... , --multiple [crawl id] [crawl id] ...` generates aligned samples for multiple web crawls so changes can be compared by domain.
+- `-v [random seed], --seedvalue [random seed]` uses a specific seed for reproducible sampling. A random seed is used by default.
+- `-n [value], --numsamples [value]` sets the number of domains to sample. The default is 100.
+- `--data-dir [path]` sets the root data directory. The default is `./data`.
+
+Validation samples include direct HTTP and HTTPS homepage and `robots.txt` URLs,
+recorded response metadata, parsed robots directives and diagnostics, and the
+captured meta tags. Multiple-crawl validation samples the same completed domain
+set in every requested crawl and also writes a combined comparison CSV. The
+validator targets the current crawl schema; older crawl files should be removed
+or regenerated before validation.
+
+Example:
+
+```bash
+python validation.py --single 202609071849 --numsamples 100 --seedvalue 42
+python validation.py --multiple 202609071849 202609071900 --seedvalue 42
+```
 
 ## Initialization
 
