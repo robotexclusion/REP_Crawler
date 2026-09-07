@@ -36,52 +36,44 @@ def _parse_meta_robots_value(value):
         return {
             "raw": "",
             "rules": [],
-            "malformed": False,
-            "warning": "Empty robots meta tag."
+            "malformed": True,
+            "warning": "Empty robots meta tag.",
+            "unknown_tokens": [],
+            "conflicting_rules": []
         }
 
-    normalized = re.sub(r"\s+", " ", raw).strip()
-    rule_tokens = [token.strip().lower() for token in re.split(r"[,\s]+", normalized) if token.strip()]
+    rule_parts = raw.split(",")
+    rule_tokens = [token.strip().lower() for token in rule_parts if token.strip()]
     known_rules = {
-        "index", "noindex", "follow", "nofollow", "all", "none",
-        "noarchive", "nosnippet", "notranslate", "noimageindex",
-        "max-snippet", "max-image-preview", "max-video-preview",
-        "unavailable_after"
+        "index", "noindex", "follow", "nofollow"
     }
 
-    malformed = False
-    bad_tokens = []
-    for token in rule_tokens:
-        if not token:
-            continue
-        if token.startswith("max-"):
-            if token.split("-", 2)[-1].startswith("snippet"):
-                continue
-        if token.startswith("max-"):
-            if token.endswith(("snippet", "image-preview", "video-preview")):
-                continue
-        if token.startswith("unavailable_after"):
-            continue
-        if token not in known_rules:
-            bad_tokens.append(token)
-
-    if not rule_tokens or bad_tokens:
-        malformed = True
-
+    malformed = (
+        not rule_tokens
+        or any(not token for token in rule_parts)
+        or (len(rule_tokens) > 1 and "," not in raw)
+        or any(re.search(r"\s", token) for token in rule_tokens)
+    )
+    unknown_tokens = [token for token in rule_tokens if token not in known_rules]
+    conflicting_rules = []
     if "index" in rule_tokens and "noindex" in rule_tokens:
-        malformed = True
+        conflicting_rules.append("index/noindex")
     if "follow" in rule_tokens and "nofollow" in rule_tokens:
-        malformed = True
+        conflicting_rules.append("follow/nofollow")
 
     return {
         "raw": raw,
         "rules": rule_tokens,
         "malformed": malformed,
         "warning": (
-            "Malformed robots meta-tag rules detected."
-            if malformed else None
+            "Malformed robots meta-tag formatting detected."
+            if malformed else (
+                "Conflicting robots meta-tag rules detected."
+                if conflicting_rules else None
+            )
         ),
-        "unknown_tokens": bad_tokens
+        "unknown_tokens": unknown_tokens,
+        "conflicting_rules": conflicting_rules
     }
 
 #function to grab domain IDs for the crawl
@@ -155,6 +147,7 @@ async def check_meta_tags(response):
             record["robots_malformed"] = parsed["malformed"]
             record["robots_warning"] = parsed["warning"]
             record["robots_unknown_tokens"] = parsed["unknown_tokens"]
+            record["robots_conflicting_rules"] = parsed["conflicting_rules"]
             record["robots_raw"] = parsed["raw"]
 
         record_bytes = len(json.dumps(record, ensure_ascii=False).encode("utf-8"))

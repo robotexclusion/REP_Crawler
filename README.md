@@ -15,6 +15,19 @@ Web crawler to examine Robots Exclusion Protocol (REP) implementation in the top
   
 All data from the web crawls is stored in `/data`. Robots.txt responses are parsed while they are being downloaded, so new crawls retain parsed results and metadata instead of saving a separate file for every response. After the parsing and output functions complete, `main.py` passes the new databases and output files through gzip compression and uploads them to a connected CloudFlare R2 Object Storage database.
 
+Robots directive records retain the normalized directive, value, source line,
+and raw line. `Allow` and `Disallow` are classified as `RFC9309`,
+`User-agent` as `USRAGT`, known non-RFC records such as `Sitemap` and
+`Crawl-delay` as `EXTENSION`, and other records as `UNKNOWN`. Diagnostics retain
+invalid UTF-8, control characters, invalid product tokens, invalid path
+patterns, missing separators, and other parse conditions without discarding the
+original directive line.
+
+Meta robots tags are collected only from the domain index HTML. Their raw
+content and parsed tokens are retained. Formatting errors, unknown tokens, and
+conflicting rules are recorded separately so a well-formed but contradictory
+tag is not mislabeled as syntactically malformed.
+
 - `/data/domains.sqlite` stores the ID's of all domains ever queried to reference across queries.
 - `/data/[number]` stores the data for individual crawls. The crawls are assigned a `crawl_id` based on the timestamp of running `main.py`.
 - `data/[number]/robots/` is retained for compatibility with older crawls. New crawls parse the responses directly and do not create individual `robots.txt` files.

@@ -2,12 +2,12 @@
 
 import codecs
 import hashlib
+import re
 import sqlite3
 
-STANDARD_DIRECTIVES = {
-    "user-agent", "allow", "disallow", "sitemap", "crawl-delay",
-    "host", "clean-param"
-}
+RFC9309_RULES = {"allow", "disallow"}
+EXTENSION_DIRECTIVES = {"sitemap", "crawl-delay", "host", "clean-param"}
+PRODUCT_TOKEN_PATTERN = re.compile(r"^(?:\*|[-A-Za-z_]+)$")
 
 
 def create_parser_database(parsed_db_path):
@@ -64,9 +64,11 @@ def normalize_directive(value):
 def classify_directive(directive):
     if directive == "user-agent":
         return "USRAGT"
-    if directive in STANDARD_DIRECTIVES:
-        return "STD"
-    return "UNK"
+    if directive in RFC9309_RULES:
+        return "RFC9309"
+    if directive in EXTENSION_DIRECTIVES:
+        return "EXTENSION"
+    return "UNKNOWN"
 
 
 class StreamingRobotParser:
@@ -153,6 +155,15 @@ class StreamingRobotParser:
         key, value = stripped.split(":", 1)
         directive = normalize_directive(key)
         value = value.split("#", 1)[0].strip()
+        if any(
+            ord(character) < 0x20 or ord(character) == 0x7F
+            for character in raw
+            if character not in "\t"
+        ):
+            self._diagnostic(
+                "CONTROL_CHARACTER", "error", raw, directive, value,
+                "Line contains a control character outside the permitted whitespace."
+            )
         if not directive:
             self._diagnostic(
                 "EMPTY_DIRECTIVE", "error", raw, directive, value,
@@ -166,6 +177,11 @@ class StreamingRobotParser:
             )
             return
         if directive == "user-agent":
+            if not PRODUCT_TOKEN_PATTERN.fullmatch(value):
+                self._diagnostic(
+                    "INVALID_PRODUCT_TOKEN", "error", raw, directive, value,
+                    "User-agent value is not a valid RFC 9309 product token."
+                )
             if self.current_group is None or self.group_has_directive:
                 self.group_number += 1
                 self.cursor.execute(
@@ -182,18 +198,23 @@ class StreamingRobotParser:
                 f"G{self.group_number}|UA|{value.strip().lower()}"
             )
             return
+        classification = classify_directive(directive)
         if self.current_group is None:
             self._diagnostic(
-                "DIRECTIVE_BEFORE_GROUP", "error", raw, directive, value,
-                "Directive appears before a User-agent directive."
+                "DIRECTIVE_BEFORE_GROUP", "warning", raw, directive, value,
+                "Directive cannot be stored in a group before a User-agent directive."
             )
             return
 
-        classification = classify_directive(directive)
-        if classification == "UNK":
+        if classification == "UNKNOWN":
             self._diagnostic(
                 "UNKNOWN_DIRECTIVE", "warning", raw, directive, value,
                 "Directive is not in the recognized REP directive set."
+            )
+        if directive in RFC9309_RULES and value and not value.startswith("/"):
+            self._diagnostic(
+                "INVALID_PATH_PATTERN", "error", raw, directive, value,
+                "RFC 9309 Allow and Disallow values must be empty or begin with '/'."
             )
         self.cursor.execute(
             """INSERT INTO directives(
@@ -207,7 +228,7 @@ class StreamingRobotParser:
         self.policy_parts.append(
             f"G{self.group_number}|D|{directive}|{value.strip()}"
         )
-        self.group_has_directive = True
+        self.group_has_directive = directive in RFC9309_RULES
 
     def finish(self, truncated=False):
         tail = self.decoder.decode(b"", final=True)
