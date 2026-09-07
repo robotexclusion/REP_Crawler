@@ -1,9 +1,17 @@
 #Holds functions related to generating useable output from the crawled data
 
 #imports
-import pandas as pd
+import csv
 from pathlib import Path
 import sqlite3
+
+def write_query_csv(connection, query, output_path):
+    cursor = connection.execute(query)
+    with open(output_path, "w", encoding="utf-8", newline="") as output:
+        writer = csv.writer(output)
+        writer.writerow([column[0] for column in cursor.description])
+        while rows := cursor.fetchmany(10000):
+            writer.writerows(rows)
 
 #function to create and output readable dataframes from the crawl
 def generate_crawl_dataframes(
@@ -26,76 +34,56 @@ def generate_crawl_dataframes(
     cur.execute(f"ATTACH DATABASE '{parsed_db_path}' AS parsed_data")
 
     print("Generating output data")
-    #generate crawl dataframe
+    # Stream each result directly to CSV instead of materializing it in pandas.
     print("Generating domain data")
-    crawl_df = pd.read_sql_query(
-        """
-        SELECT *,
+    crawl_query = """
+        SELECT fetches.*,
         domains.master_domain_id,
         master_domains.master_domain_names.domain_name
         FROM fetches
-        LEFT JOIN domains ON
-        fetches.domain_id = domains.domain_id
+        LEFT JOIN domains ON fetches.domain_id = domains.domain_id
         LEFT JOIN master_domains.master_domain_names ON
         domains.master_domain_id = master_domains.master_domain_names.master_domain_id
-        """,
-        conn
-    )
+    """
+    write_query_csv(conn, crawl_query, output_dir / crawl_df_filename)
 
-    #generate robots.txt dataframe
     print("Generating robots.txt file data")
-    robots_df = pd.read_sql_query(
-        """
-        Select fetches.domain_id,
+    robots_query = """
+        SELECT fetches.domain_id,
         fetches.fetch_id,
         domains.master_domain_id,
         parsed_data.files.parse_errors,
         parsed_data.groups.group_id,
+        parsed_data.user_agents.user_agent,
         parsed_data.directives.directive_id,
         parsed_data.directives.directive,
         parsed_data.directives.value,
         parsed_data.directives.classification
         FROM fetches
-        LEFT JOIN domains ON
-        fetches.domain_id = domains.domain_id
-        LEFT JOIN parsed_data.files ON
-        fetches.fetch_id = parsed_data.files.fetch_id
-        LEFT JOIN parsed_data.groups ON
-        fetches.fetch_id = parsed_data.groups.fetch_id
-        LEFT JOIN parsed_data.user_agents ON
-        parsed_data.groups.group_id = parsed_data.user_agents.group_id
-        LEFT JOIN parsed_data.directives ON
-        parsed_data.groups.group_id = parsed_data.directives.group_id
-        """,
-        conn
-    )
+        LEFT JOIN domains ON fetches.domain_id = domains.domain_id
+        LEFT JOIN parsed_data.files ON fetches.fetch_id = parsed_data.files.fetch_id
+        LEFT JOIN parsed_data.groups ON fetches.fetch_id = parsed_data.groups.fetch_id
+        LEFT JOIN parsed_data.user_agents ON parsed_data.groups.group_id = parsed_data.user_agents.group_id
+        LEFT JOIN parsed_data.directives ON parsed_data.groups.group_id = parsed_data.directives.group_id
+    """
+    write_query_csv(conn, robots_query, output_dir / robots_df_filename)
 
-    #generate meta tags dataframe
     print("Generating meta tag data")
-    meta_df = pd.read_sql_query(
-        """
-        Select fetches.domain_id,
+    meta_query = """
+        SELECT fetches.domain_id,
         domains.master_domain_id,
         parsed_data.meta_tags.meta_tag_id,
         parsed_data.meta_tags.meta_tag_name,
         parsed_data.meta_tags.meta_tag_content
         FROM fetches
-        LEFT JOIN domains ON
-        fetches.domain_id = domains.domain_id
-        LEFT JOIN parsed_data.meta_tags ON
-        fetches.fetch_id = parsed_data.meta_tags.fetch_id
-        """,
-        conn
-    )
+        LEFT JOIN domains ON fetches.domain_id = domains.domain_id
+        LEFT JOIN parsed_data.meta_tags ON fetches.fetch_id = parsed_data.meta_tags.fetch_id
+    """
+    write_query_csv(conn, meta_query, output_dir / meta_df_filename)
     cur.close()
 
-    #save to csv files in crawl directory
     print(f"Saving output data for crawl '{crawl_id}'")
-    crawl_df.to_csv(output_dir / crawl_df_filename, index=False)
-    robots_df.to_csv(output_dir / robots_df_filename, index=False)
-    meta_df.to_csv(output_dir / meta_df_filename, index=False)
     print(f"Output data saved for crawl '{crawl_id}' in '{output_dir}'")
-
     return
 
 def main_output_func(
@@ -111,7 +99,7 @@ def main_output_func(
         print("Building output.")
         generate_crawl_dataframes(crawl_db_path, master_domain_db_path, parsed_db_path, crawl_id, output_dir)
         print("Output complete.")
-    elif input("Output results to crawl directory? (y/n): ").lower == 'y':
+    elif input("Output results to crawl directory? (y/n): ").lower() == 'y':
         print("Building output.")
         generate_crawl_dataframes(crawl_db_path, master_domain_db_path, parsed_db_path, crawl_id, output_dir)
         print("Output complete.'")

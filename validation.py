@@ -23,7 +23,10 @@ def setup_arg_parser():
     parser.add_argument("-v", "--seedvalue",
                         help = "Pass a seed value if needed for random sampling (Default: New seed each validation)")
     parser.add_argument("-n", "--numsamples",
+                        type=int,
                         help = "Pass a limit if needed for random sampling (Default: 100)")
+
+    return parser.parse_args()
 
 #main
 def main():
@@ -32,8 +35,8 @@ def main():
     print("REP Crawler Validation")
 
     #vars for sampling, change to replicate a random sample
-    seed_value = args.seedvalue() if args.seedvalue() else np.random.randint(0, 1000000)
-    num_samples = args.numsumples() if args.numsamples() else 100
+    seed_value = int(args.seedvalue) if args.seedvalue else np.random.randint(0, 1000000)
+    num_samples = args.numsamples if args.numsamples else 100
     np.random.seed(seed_value)
 
     print(f"Random seed value: {seed_value}")

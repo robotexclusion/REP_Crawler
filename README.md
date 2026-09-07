@@ -13,11 +13,11 @@ Web crawler to examine Robots Exclusion Protocol (REP) implementation in the top
 - `python validation.py` runs the functions to generate and replicate random sampling for manual validation of results (i.e., through a web browser).
 - `python query.py` runs a SQLite query on the main domain file (Master list of all domains queried across all crawls).
   
-All data from the web crawls is stored in `/data`. After the parsing and output functions complete, `main.py` passes the new databases and crawled robots.txt files through gzip compression and uploads them to a connected CloudFlare R2 Object Storage database. 
+All data from the web crawls is stored in `/data`. Robots.txt responses are parsed while they are being downloaded, so new crawls retain parsed results and metadata instead of saving a separate file for every response. After the parsing and output functions complete, `main.py` passes the new databases and output files through gzip compression and uploads them to a connected CloudFlare R2 Object Storage database.
 
 - `/data/domains.sqlite` stores the ID's of all domains ever queried to reference across queries.
 - `/data/[number]` stores the data for individual crawls. The crawls are assigned a `crawl_id` based on the timestamp of running `main.py`.
-- `data/[number]/robots/` stores the collected `robots.txt` files.
+- `data/[number]/robots/` is retained for compatibility with older crawls. New crawls parse the responses directly and do not create individual `robots.txt` files.
 - `data/[number]/output` stores raw and parsed .csv outputs of the respective crawl.
 
 ## Dependencies
@@ -37,7 +37,10 @@ For `main.py`:
 - `-a, --autorun` skips user verification of process steps, running the entire program automatically.
 - `-p [crawl_id], --parse [crawl_id]` skips the crawl step and starts with parsing data using a given crawl_id directory
 - `-o [crawl_id], --output [crawl_id]` skips the crawl and parsing steps and starts with generating output data using a given crawl_id directory
+- `-c [crawl_id], --crawlid [crawl_id]` provides the crawl ID when using parse, output, or resume options
 - `-u, --noupload` skip uploading the crawl data to the connected R2 bucket
+- `--max-domains [value]` limits the number of domains in a crawl. The default is 100, and `0` runs the full Tranco list
+- `--resume` resumes an interrupted crawl using its saved Tranco snapshot. This option requires `--crawlid`
 
 For `validation.py':
 
@@ -95,3 +98,20 @@ Run the main crawler:
 ```bash
 python main.py
 ```
+
+The crawler parses robots responses while they are streamed and retains only
+parsed SQLite rows and metadata. A robots response is limited to 8 MiB by
+default so an unbounded response cannot exhaust memory. To change the limit,
+set the `REP_MAX_ROBOTS_BYTES` environment variable. Responses over the limit
+are marked `ROBOTS_TOO_LARGE` and counted as parse errors rather than being
+reported as complete.
+
+Progress is checkpointed after each completed domain. If a crawl stops, resume
+it with:
+
+```bash
+python main.py --autorun --resume --crawlid 202609071731 --max-domains 0 --noupload
+```
+
+The saved Tranco snapshot is reused, completed domains are skipped, and any
+incomplete fetch rows from the interrupted run are discarded before retrying.

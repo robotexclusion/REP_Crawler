@@ -16,7 +16,7 @@ def main():
     print("Fetching all domains from master domain database...")
     master_conn = sqlite3.connect(master_domain_db_path)
     master_cur = master_conn.cursor()
-    master_cur.execute("SELECT * FROM domains")
+    master_cur.execute("SELECT * FROM master_domain_names")
     master_domains = pd.DataFrame(master_cur.fetchall(), columns=[description[0] for description in master_cur.description])
 
     print("Displaying top 10 results...")

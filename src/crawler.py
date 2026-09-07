@@ -6,9 +6,15 @@ import asyncio
 import hashlib
 import time
 import json
+import os
 from datetime import datetime
 from tqdm.asyncio import tqdm_asyncio
 from bs4 import BeautifulSoup
+from src.parse import StreamingRobotParser
+from src.startup import checkpoint_crawl
+
+MAX_ROBOTS_BYTES = int(os.environ.get("REP_MAX_ROBOTS_BYTES", 8 * 1024 * 1024))
+MAX_HTML_BYTES = 2 * 1024 * 1024
 
 #utf-8 decoding for text parsing
 def sha256_text(text):
@@ -66,7 +72,10 @@ def get_content_type(response):
 
 #function to check if the domain we contacted is html, and if so check if it has meta robots tags
 async def check_meta_tags(response):
-    html = await response.text(errors="ignore")
+    html_bytes = await response.content.read(MAX_HTML_BYTES + 1)
+    if len(html_bytes) > MAX_HTML_BYTES:
+        html_bytes = html_bytes[:MAX_HTML_BYTES]
+    html = html_bytes.decode(response.charset or "utf-8", errors="ignore")
     soup = BeautifulSoup(html, "html.parser")
 
     #is html, check for robots tags
@@ -93,7 +102,7 @@ async def check_meta_tags(response):
     return None
 
 #connect to domain for robots.txt with error handling
-async def fetch_robot(session, domain):
+async def fetch_robot(session, domain, on_robot_chunk=None):
     protocols = ["https", "http"]
     last_exception = None
     content_type = None
@@ -120,6 +129,7 @@ async def fetch_robot(session, domain):
                     #if html, check for meta tags
                     if "text/html" in content_type:
                         meta_tags = await check_meta_tags(response)
+                    break
 
         # HTTPS failed, try HTTP
         except (
@@ -148,17 +158,36 @@ async def fetch_robot(session, domain):
                 elapsed = (time.time() - start) * 1000
 
                 #Server answered
+                content_type = get_content_type(response)
                 if response.status == 200:
                     #Has robots.txt
-                    text = await response.text(errors="ignore")
+                    received_bytes = 0
+                    truncated = False
+                    async for chunk in response.content.iter_chunked(64 * 1024):
+                        remaining = MAX_ROBOTS_BYTES - received_bytes
+                        if remaining <= 0:
+                            truncated = True
+                            break
+                        accepted = chunk[:remaining]
+                        if on_robot_chunk and accepted:
+                            on_robot_chunk(accepted)
+                        received_bytes += len(accepted)
+                        if len(accepted) < len(chunk):
+                            truncated = True
+                            break
                     return {
                         "status_code": 200,
-                        "result": "SUCCESS",
+                        "result": "ROBOTS_TOO_LARGE" if truncated else "SUCCESS",
                         "protocol": protocol,
                         "content_type": content_type,
-                        "content": text,
+                        "content": None,
                         "time": elapsed,
-                        "exception": None,
+                        "exception": (
+                            f"robots.txt exceeds {MAX_ROBOTS_BYTES} bytes"
+                            if truncated else None
+                        ),
+                        "robot_bytes": received_bytes,
+                        "robot_truncated": truncated,
                         "meta_tags": meta_tags,
                         "meta_tags_response_status": meta_tags_response_status,
                         "meta_tags_last_exception": meta_tags_last_exception,
@@ -166,14 +195,11 @@ async def fetch_robot(session, domain):
                         "meta_tags_exception": meta_tags_exception
                     }
 
-                # does not have robots.txt, but responded
-                #get content type
+                # Try the other protocol before classifying a non-success response.
                 content_type = get_content_type(response)
-                #if html, check for meta tags
                 if "text/html" in content_type:
                     meta_tags = await check_meta_tags(response)
-
-                return {
+                last_result = {
                     "status_code": response.status,
                     "result": f"HTTP_{response.status}",
                     "protocol": protocol,
@@ -186,8 +212,8 @@ async def fetch_robot(session, domain):
                     "meta_tags_last_exception": meta_tags_last_exception,
                     "meta_tags_error": meta_tags_error,
                     "meta_tags_exception": meta_tags_exception
-
                 }
+                continue
 
         # HTTPS failed, try HTTP
         except (
@@ -216,6 +242,9 @@ async def fetch_robot(session, domain):
                 "meta_tags_exception": meta_tags_exception
             }
 
+    if "last_result" in locals():
+        return last_result
+
     # HTTPS and HTTP both failed
     return {
         "status_code": None,
@@ -233,105 +262,83 @@ async def fetch_robot(session, domain):
     }
 
 #function for storing data for individual domains during crawl
-async def process_domain(session, row, conn, master_conn, crawl_id, robots_dir, crawl_dir):
+async def process_domain(session, row, conn, master_conn, parsed_conn, crawl_id, robots_dir, crawl_dir):
     domain = row.domain
     rank = row.Index
-    result = await fetch_robot(session, domain)
     domain_id = get_domain_id(conn, master_conn, domain)
     cur = conn.cursor()
-    master_cur = master_conn.cursor()
+    cur.execute("""
+        INSERT INTO fetches(crawl_id, domain_id, tranco_rank, timestamp, completed)
+        VALUES (?, ?, ?, ?, 0)
+    """, (crawl_id, domain_id, rank, datetime.now().isoformat()))
+    fetch_id = cur.lastrowid
+    conn.commit()
+
+    robot_parser = None
+
+    def consume_robot_chunk(chunk):
+        nonlocal robot_parser
+        if robot_parser is None:
+            robot_parser = StreamingRobotParser(fetch_id, parsed_conn)
+        robot_parser.feed(chunk)
+
+    result = await fetch_robot(session, domain, consume_robot_chunk)
 
     ####test output
     # print(f"Processing domain: {domain} with rank: {rank}")
 
-    # Insert initial metadata row
+    # Complete the checkpoint row only after network work is finished.
     cur.execute("""
-        INSERT INTO fetches (
-            crawl_id,
-            domain_id,
-            tranco_rank,
-            timestamp,
-            status_code,
-            result,
-            protocol,
-            content_type,
-            response_time_ms,
-            filename,
-            bytes,
-            sha256,
-            exception,
-            meta_tags_response_status,
-            meta_tags_last_exception,
-            meta_tags_error,
-            meta_tags_exception
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        UPDATE fetches SET
+            status_code = ?,
+            result = ?,
+            protocol = ?,
+            content_type = ?,
+            response_time_ms = ?,
+            exception = ?,
+            meta_tags_response_status = ?,
+            meta_tags_last_exception = ?,
+            meta_tags_error = ?,
+            meta_tags_exception = ?,
+            meta_tags = ?
+        WHERE fetch_id = ?
     """, (
-        crawl_id,
-        domain_id,
-        rank,
-        datetime.now().isoformat(),
         result.get("status_code"),
         result.get("result"),
         result.get("protocol"),
         result.get("content_type"),
         result.get("time"),
-        None,
-        None,
-        None,
         result.get("exception"),
         result.get("meta_tags_response_status"),
         result.get("meta_tags_last_exception"),
         result.get("meta_tags_error"),
-        result.get("meta_tags_exception")
+        result.get("meta_tags_exception"),
+        json.dumps(result.get("meta_tags")) if result.get("meta_tags") else None,
+        fetch_id
     ))
-    fetch_id = cur.lastrowid
-
-    #if we got any meta tag results, save them
-    if result.get("meta_tags"):
-        cur.execute("""
-        UPDATE fetches
-        SET
-            meta_tags = ?
-        WHERE fetch_id = ?
-        """, (
-            json.dumps(result.get("meta_tags")),
-            fetch_id
-        ))
-
-    # Save robots.txt if we received one
-    if result.get("content"):
-        filename = save_robot_file(
-            result["content"],
-            fetch_id,
-            robots_dir,
-            crawl_dir
-        )
-        file_hash = sha256_text(
-            result["content"]
-        )
-        size = len(
-            result["content"].encode("utf-8")
+    if robot_parser is not None:
+        file_hash, size = robot_parser.finish(
+            result.get("robot_truncated", False)
+            or result.get("result") != "SUCCESS"
         )
         cur.execute("""
             UPDATE fetches
             SET
-                filename = ?,
                 sha256 = ?,
                 bytes = ?
             WHERE fetch_id = ?
         """, (
-            filename,
             file_hash,
             size,
             fetch_id
         ))
-    conn.commit()
+    cur.execute("UPDATE fetches SET completed=1 WHERE fetch_id=?", (fetch_id,))
+    checkpoint_crawl(conn, crawl_id, rank)
 
 #function for connections and running the crawler
 async def run_crawl(
     df, USER_AGENT, TIMEOUT, CONCURRENCY, LIMIT_PER_HOST,
-    conn, master_conn, crawl_id, robots_dir, crawl_dir
+    conn, master_conn, parsed_conn, crawl_id, robots_dir, crawl_dir
 ):
     timeout = aiohttp.ClientTimeout(
         total=TIMEOUT
@@ -353,22 +360,18 @@ async def run_crawl(
 
     #now connect to each one
     ) as session:
-        tasks = []
-        for row in df.itertuples():
-            # test output
-            # print(f"Appending domain: {row.domain} with rank: {row.Index}")
-            tasks.append(process_domain(
-                session,
-                row,
-                conn,
-                master_conn,
-                crawl_id,
-                robots_dir,
-                crawl_dir
+        batch = []
+        batch_size = max(CONCURRENCY * 2, 1)
+        for row in df:
+            batch.append(process_domain(
+                session, row, conn, master_conn, parsed_conn,
+                crawl_id, robots_dir, crawl_dir
             ))
-        await tqdm_asyncio.gather(
-            *tasks
-        )
+            if len(batch) >= batch_size:
+                await tqdm_asyncio.gather(*batch)
+                batch.clear()
+        if batch:
+            await tqdm_asyncio.gather(*batch)
 
 async def main_crawl_func(
         args,
@@ -379,6 +382,7 @@ async def main_crawl_func(
         LIMIT_PER_HOST,
         conn,
         master_conn,
+        parsed_conn,
         crawl_id,
         robots_dir,
         crawl_dir
@@ -393,6 +397,7 @@ async def main_crawl_func(
                         LIMIT_PER_HOST, 
                         conn, 
                         master_conn, 
+                        parsed_conn,
                         crawl_id,
                         robots_dir,
                         crawl_dir
@@ -409,6 +414,7 @@ async def main_crawl_func(
                         LIMIT_PER_HOST, 
                         conn, 
                         master_conn, 
+                        parsed_conn,
                         crawl_id,
                         robots_dir,
                         crawl_dir

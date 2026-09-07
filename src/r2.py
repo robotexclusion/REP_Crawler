@@ -6,6 +6,13 @@ import gzip
 import shutil
 import boto3
 from pathlib import Path
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+if load_dotenv:
+    load_dotenv()
 
 #grab cloudflare credentials
 def grab_cloudflare_r2_access():
@@ -25,15 +32,18 @@ def grab_cloudflare_r2_access():
         "CLOUDFLARE_R2_S3_API"
     )
 
-    if not all([
-        cloudflare_account_id,
-        cloudflare_r2_access_key,
-        cloudflare_r2_secret_key,
-        cloudflare_r2_bucket,
-        cloudflare_s3_api
-    ]):
+    variables = {
+        "CLOUDFLARE_R2_ACCOUNT_ID": cloudflare_account_id,
+        "CLOUDFLARE_R2_ACCESS_KEY_ID": cloudflare_r2_access_key,
+        "CLOUDFLARE_R2_SECRET_ACCESS_KEY": cloudflare_r2_secret_key,
+        "CLOUDFLARE_R2_BUCKET": cloudflare_r2_bucket,
+        "CLOUDFLARE_R2_S3_API": cloudflare_s3_api,
+    }
+    missing = [name for name, value in variables.items() if not value]
+    if missing:
         raise RuntimeError(
-            "Missing one or more Cloudflare R2 environment variables."
+            "Missing Cloudflare R2 environment variables: "
+            + ", ".join(missing)
         )
 
     return (
@@ -151,12 +161,14 @@ def upload_crawl(crawl_id, base_dir):
     # R2 directory for this crawl
     r2_prefix = f"crawls/{crawl_id}"
 
-    #upload .csv files
+    # Upload durable metadata and tabular output. Raw robots files are no
+    # longer created by new crawls.
     csv_files = list(crawl_dir.glob("*.csv"))
+    sqlite_files = list(crawl_dir.glob("*.sqlite"))
 
-    for csv_file in csv_files:
+    for data_file in csv_files + sqlite_files:
 
-        compressed_file = compress_data(csv_file)
+        compressed_file = compress_data(data_file)
 
         r2_path = (
             f"{r2_prefix}/"
@@ -164,6 +176,7 @@ def upload_crawl(crawl_id, base_dir):
         )
 
         upload_data(compressed_file, r2_path)
+        compressed_file.unlink()
 
     #upload robots.txt files
     robots_dir = crawl_dir / "robots"

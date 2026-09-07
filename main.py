@@ -12,6 +12,7 @@ from src.output import *
 from src.r2 import *
 from pathlib import Path
 from datetime import datetime
+from types import SimpleNamespace
 
 #main function
 async def main():
@@ -25,14 +26,16 @@ async def main():
     LIMIT_PER_HOST = 1
     TIMEOUT = 15
     # optional test size, set to None for unlimited/full list
-    MAX_DOMAINS = 100
+    MAX_DOMAINS = args.max_domains or None
 
     #skip options from args
     skip_crawl = False
     skip_parse = False
     no_upload = False
 
-    if args.parse:
+    if args.resume:
+        crawl_id = args.crawlid
+    elif args.parse:
         skip_crawl = True
         crawl_id = args.crawlid
     elif args.output:
@@ -80,10 +83,17 @@ async def main():
     meta_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if not skip_crawl:
+    if not skip_crawl and not args.resume:
         #Get TRANCO
         print("Downloading latest Tranco list...")
         TRANCO_FILE = download_latest_tranco_list(crawl_dir)
+    elif args.resume:
+        snapshots = sorted(crawl_dir.glob("tranco_list_*.csv"))
+        if not snapshots:
+            raise FileNotFoundError(
+                f"No saved Tranco snapshot found in {crawl_dir}"
+            )
+        TRANCO_FILE = snapshots[-1]
 
     #check if master database exists, if not create it
     print(f"Checking for master domain database at: {master_domain_db_path}")
@@ -98,39 +108,50 @@ async def main():
         #create crawl db file
         print(f"Creating crawl database at: {crawl_db_path}")
         conn = create_crawl_database(crawl_db_path)
-
-        #read the tranco list file and make a dataframe of the index and domain names
-        domains_df = pd.read_csv(TRANCO_FILE, header=None)
-        domains_df.columns = ['Index','domain']
-
-        #if a limit was passed to MAX_DOMAINS, limit the number of domains crawled
-        if MAX_DOMAINS:
-            domains_df = domains_df.head(MAX_DOMAINS)
+        start_crawl(conn, crawl_id)
 
         #update main db file with names from the list
         print("Updating master domain database with new domains...")
-        prime_main_domain_db(master_conn, domains_df)
+        if not args.resume:
+            prime_main_domain_db(
+                master_conn,
+                iter_tranco_domains(TRANCO_FILE, MAX_DOMAINS)
+            )
+
+    parsed_conn = create_parser_database(parsed_db_path)
+    if args.resume:
+        discarded = discard_incomplete_fetches(conn, parsed_conn, crawl_id)
+        if discarded:
+            print(f"Discarded {discarded} incomplete fetch checkpoints.")
 
     print("Ready")
 
     # Execute the web crawl
     if not skip_crawl:
+        completed = completed_ranks(conn, crawl_id)
         await main_crawl_func(
             args,
-            domains_df,
+            (
+                SimpleNamespace(Index=rank, domain=domain)
+                for rank, domain in iter_pending_tranco_domains(
+                    TRANCO_FILE, completed, MAX_DOMAINS
+                )
+            ),
             USER_AGENT,
             TIMEOUT,
             CONCURRENCY,
             LIMIT_PER_HOST,
             conn,
             master_conn,
+            parsed_conn,
             crawl_id,
             robots_dir,
             crawl_dir
             )
+        finish_crawl(conn, crawl_id)
 
     #parse the collected data, alinging and checking rules etc
-    if not skip_parse:
+    if skip_crawl and not skip_parse:
         main_parse_func(
             args,
             parsed_db_path,
