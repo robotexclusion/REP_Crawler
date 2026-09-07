@@ -238,7 +238,8 @@ def finish_crawl(conn, crawl_id):
 
 def checkpoint_crawl(conn, crawl_id, rank):
     conn.execute(
-        """UPDATE crawl SET last_rank=?, completed_domains=completed_domains + 1,
+        """UPDATE crawl SET last_rank=MAX(COALESCE(last_rank, 0), ?),
+        completed_domains=completed_domains + 1,
         checkpointed_at=datetime('now') WHERE crawl_id=?""",
         (rank, crawl_id)
     )

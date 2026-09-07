@@ -87,7 +87,17 @@ def get_domain_id(conn, master_conn, domain):
     )
     master_domain_id = master_cur.fetchone()[0]
 
-  #drop the master domain id into local domain table to get a local domain id
+    cur.execute(
+        "SELECT domain_id FROM domains WHERE master_domain_id=?",
+        (master_domain_id,)
+    )
+    existing_domain = cur.fetchone()
+    if existing_domain is not None:
+        master_cur.close()
+        cur.close()
+        return existing_domain[0]
+
+    #drop the master domain id into local domain table to get a local domain id
     cur.execute(
         "INSERT OR IGNORE INTO domains(master_domain_id) VALUES (?)",
         (master_domain_id,)
