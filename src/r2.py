@@ -222,12 +222,23 @@ def download_crawl(crawl_id, output_dir):
 
     client, bucket = get_r2_client()
 
-    response = client.list_objects_v2(
-        Bucket=bucket,
-        Prefix=r2_prefix
-    )
+    contents = []
+    continuation_token = None
+    while True:
+        request = {
+            "Bucket": bucket,
+            "Prefix": r2_prefix,
+        }
+        if continuation_token:
+            request["ContinuationToken"] = continuation_token
+        response = client.list_objects_v2(**request)
+        contents.extend(response.get("Contents", []))
+        if not response.get("IsTruncated"):
+            break
+        continuation_token = response.get("NextContinuationToken")
+        if not continuation_token:
+            raise RuntimeError("R2 object listing was truncated without a continuation token.")
 
-    contents = response.get("Contents", [])
     if not contents:
         raise FileNotFoundError(
             f"No crawl found in R2: {crawl_id}"

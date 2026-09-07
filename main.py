@@ -105,6 +105,7 @@ async def main():
     else:
         print("Master domain database located.")
     master_conn = sqlite3.connect(master_domain_db_path)
+    conn = None
 
     if not skip_crawl:
         #create crawl db file
@@ -149,6 +150,13 @@ async def main():
             crawl_id
             )
         finish_crawl(conn, crawl_id)
+        conn.close()
+        conn = None
+
+    master_conn.close()
+    master_conn = None
+    parsed_conn.close()
+    parsed_conn = None
 
     # Output the parsed data to dataframes
     main_output_func(

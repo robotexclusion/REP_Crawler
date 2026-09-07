@@ -169,7 +169,7 @@ async def check_meta_tags(response):
 async def fetch_robot(session, domain, on_robot_chunk=None):
     protocols = ["https", "http"]
     last_exception = None
-    content_type = None
+    index_content_type = None
     meta_tags = None
     meta_tags_response_status = None
     meta_tags_last_exception = None
@@ -187,11 +187,11 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
             ) as response:
                 #Server answered
                 meta_tags_response_status = response.status
+                index_content_type = get_content_type(response)
                 if response.status == 200:
                     #Has index
-                    content_type = get_content_type(response)
                     #if html, check for meta tags
-                    if "text/html" in content_type:
+                    if "text/html" in index_content_type:
                         meta_tags = await check_meta_tags(response)
                     break
 
@@ -222,7 +222,6 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                 elapsed = (time.time() - start) * 1000
 
                 #Server answered
-                content_type = get_content_type(response)
                 if response.status == 200:
                     #Has robots.txt
                     received_bytes = 0
@@ -234,7 +233,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                             break
                         accepted = chunk[:remaining]
                         if on_robot_chunk and accepted:
-                            on_robot_chunk(accepted)
+                            await on_robot_chunk(accepted)
                         received_bytes += len(accepted)
                         if len(accepted) < len(chunk):
                             truncated = True
@@ -243,7 +242,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                         "status_code": 200,
                         "result": "ROBOTS_TOO_LARGE" if truncated else "SUCCESS",
                         "protocol": protocol,
-                        "content_type": content_type,
+                        "content_type": index_content_type,
                         "content": None,
                         "time": elapsed,
                         "exception": (
@@ -259,15 +258,11 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                         "meta_tags_exception": meta_tags_exception
                     }
 
-                # Try the other protocol before classifying a non-success response.
-                content_type = get_content_type(response)
-                if "text/html" in content_type:
-                    meta_tags = await check_meta_tags(response)
                 last_result = {
                     "status_code": response.status,
                     "result": f"HTTP_{response.status}",
                     "protocol": protocol,
-                    "content_type": content_type,
+                    "content_type": index_content_type,
                     "content": None,
                     "time": elapsed,
                     "exception": None,
@@ -295,7 +290,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                 "status_code": None,
                 "result": type(e).__name__,
                 "protocol": protocol,
-                "content_type": content_type,
+                "content_type": index_content_type,
                 "content": None,
                 "time": None,
                 "exception": str(e),
@@ -314,7 +309,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
         "status_code": None,
         "result": "CONNECTION_FAILED",
         "protocol": None,
-        "content_type": content_type,
+        "content_type": index_content_type,
         "content": None,
         "time": None,
         "exception": str(last_exception) if last_exception else None,
@@ -328,86 +323,94 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
     }
 
 #function for storing data for individual domains during crawl
-async def process_domain(session, row, conn, master_conn, parsed_conn, crawl_id):
+async def process_domain(
+    session, row, conn, master_conn, parsed_conn, crawl_id, db_lock
+):
     domain = row.domain
     rank = row.Index
-    domain_id = get_domain_id(conn, master_conn, domain)
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO fetches(crawl_id, domain_id, tranco_rank, timestamp, completed)
-        VALUES (?, ?, ?, ?, 0)
-    """, (crawl_id, domain_id, rank, datetime.now().isoformat()))
-    fetch_id = cur.lastrowid
-    conn.commit()
+    async with db_lock:
+        domain_id = get_domain_id(conn, master_conn, domain)
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO fetches(crawl_id, domain_id, tranco_rank, timestamp, completed)
+            VALUES (?, ?, ?, ?, 0)
+        """, (crawl_id, domain_id, rank, datetime.now().isoformat()))
+        fetch_id = cur.lastrowid
+        conn.commit()
+        cur.close()
 
     robot_parser = None
 
-    def consume_robot_chunk(chunk):
+    async def consume_robot_chunk(chunk):
         nonlocal robot_parser
-        if robot_parser is None:
-            robot_parser = StreamingRobotParser(fetch_id, parsed_conn)
-        robot_parser.feed(chunk)
+        async with db_lock:
+            if robot_parser is None:
+                robot_parser = StreamingRobotParser(fetch_id, parsed_conn)
+            robot_parser.feed(chunk)
 
     result = await fetch_robot(session, domain, consume_robot_chunk)
 
-    cur.execute("""
-        UPDATE fetches SET
-            status_code = ?,
-            result = ?,
-            protocol = ?,
-            content_type = ?,
-            response_time_ms = ?,
-            exception = ?,
-            meta_tags_response_status = ?,
-            meta_tags_last_exception = ?,
-            meta_tags_error = ?,
-            meta_tags_exception = ?,
-            meta_tags = ?
-        WHERE fetch_id = ?
-    """, (
-        result.get("status_code"),
-        result.get("result"),
-        result.get("protocol"),
-        result.get("content_type"),
-        result.get("time"),
-        result.get("exception"),
-        result.get("meta_tags_response_status"),
-        result.get("meta_tags_last_exception"),
-        result.get("meta_tags_error"),
-        result.get("meta_tags_exception"),
-        json.dumps(result.get("meta_tags")) if result.get("meta_tags") else None,
-        fetch_id
-    ))
-
-    if robot_parser is not None:
-        raw_hash, policy_hash, byte_count, _ = robot_parser.finish(
-            result.get("robot_truncated", False)
-            or result.get("result") != "SUCCESS"
-        )
+    async with db_lock:
+        cur = conn.cursor()
         cur.execute("""
-            UPDATE fetches
-            SET
-                sha256 = ?,
-                bytes = ?,
-                policy_hash = ?,
-                truncated = ?,
-                completed = 1
+            UPDATE fetches SET
+                status_code = ?,
+                result = ?,
+                protocol = ?,
+                content_type = ?,
+                response_time_ms = ?,
+                exception = ?,
+                meta_tags_response_status = ?,
+                meta_tags_last_exception = ?,
+                meta_tags_error = ?,
+                meta_tags_exception = ?,
+                meta_tags = ?
             WHERE fetch_id = ?
         """, (
-            raw_hash,
-            byte_count,
-            policy_hash,
-            int(result.get("robot_truncated", False)),
+            result.get("status_code"),
+            result.get("result"),
+            result.get("protocol"),
+            result.get("content_type"),
+            result.get("time"),
+            result.get("exception"),
+            result.get("meta_tags_response_status"),
+            result.get("meta_tags_last_exception"),
+            result.get("meta_tags_error"),
+            result.get("meta_tags_exception"),
+            json.dumps(result.get("meta_tags")) if result.get("meta_tags") else None,
             fetch_id
         ))
-    else:
-        cur.execute(
-            "UPDATE fetches SET completed=1 WHERE fetch_id=?",
-            (fetch_id,)
-        )
 
-    conn.commit()
-    checkpoint_crawl(conn, crawl_id, rank)
+        if robot_parser is not None:
+            raw_hash, policy_hash, byte_count, _ = robot_parser.finish(
+                result.get("robot_truncated", False)
+                or result.get("result") != "SUCCESS"
+            )
+            cur.execute("""
+                UPDATE fetches
+                SET
+                    sha256 = ?,
+                    bytes = ?,
+                    policy_hash = ?,
+                    truncated = ?,
+                    completed = 1
+                WHERE fetch_id = ?
+            """, (
+                raw_hash,
+                byte_count,
+                policy_hash,
+                int(result.get("robot_truncated", False)),
+                fetch_id
+            ))
+        else:
+            cur.execute(
+                "UPDATE fetches SET completed=1 WHERE fetch_id=?",
+                (fetch_id,)
+            )
+
+        conn.commit()
+        cur.close()
+        checkpoint_crawl(conn, crawl_id, rank)
 
 #function for connections and running the crawler
 async def run_crawl(
@@ -434,12 +437,13 @@ async def run_crawl(
 
     #now connect to each one
     ) as session:
+        db_lock = asyncio.Lock()
         batch = []
         batch_size = max(CONCURRENCY * 2, 1)
         for row in df:
             batch.append(process_domain(
                 session, row, conn, master_conn, parsed_conn,
-                crawl_id
+                crawl_id, db_lock
             ))
             if len(batch) >= batch_size:
                 await tqdm_asyncio.gather(*batch)

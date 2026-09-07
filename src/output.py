@@ -156,6 +156,7 @@ def generate_crawl_dataframes(
                     tag.get("robots_raw"),
                 ])
     cur.close()
+    conn.close()
 
     print(f"Saving output data for crawl '{crawl_id}'")
     print(f"Output data saved for crawl '{crawl_id}' in '{output_dir}'")

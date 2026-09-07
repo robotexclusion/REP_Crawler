@@ -87,14 +87,16 @@ def download_latest_tranco_list(crawl_dir):
     tranco_file_name = "tranco_list_" + tranco_info["created_on"] + ".csv"
     tranco_file = crawl_dir / tranco_file_name
 
-    response = requests.get(
+    with requests.get(
         tranco_download_url,
+        stream=True,
         timeout=120
-    )
-    response.raise_for_status()
-
-    with open(tranco_file, "wb") as f:
-        f.write(response.content)
+    ) as response:
+        response.raise_for_status()
+        with open(tranco_file, "wb") as f:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    f.write(chunk)
 
 
     print(f"Saved Tranco list to: {tranco_file}")

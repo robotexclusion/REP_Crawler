@@ -132,6 +132,7 @@ class StreamingRobotParser:
         self.buffer = lines.pop()
         for line in lines:
             self._parse_line(line.rstrip("\r"))
+        self.connection.commit()
 
     def _parse_line(self, raw):
         self.line_count += 1
