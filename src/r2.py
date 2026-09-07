@@ -21,12 +21,16 @@ def grab_cloudflare_r2_access():
     cloudflare_r2_bucket = os.environ.get(
         "CLOUDFLARE_R2_BUCKET"
     )
+    cloudflare_s3_api = os.environ.get(
+        "CLOUDFLARE_R2_S3_API"
+    )
 
     if not all([
         cloudflare_account_id,
         cloudflare_r2_access_key,
         cloudflare_r2_secret_key,
-        cloudflare_r2_bucket
+        cloudflare_r2_bucket,
+        cloudflare_s3_api
     ]):
         raise RuntimeError(
             "Missing one or more Cloudflare R2 environment variables."
@@ -36,7 +40,8 @@ def grab_cloudflare_r2_access():
         cloudflare_account_id,
         cloudflare_r2_access_key,
         cloudflare_r2_secret_key,
-        cloudflare_r2_bucket
+        cloudflare_r2_bucket,
+        cloudflare_s3_api
     )
 
 #get connection to r2 server
@@ -45,12 +50,14 @@ def get_r2_client():
         account_id,
         access_key,
         secret_key,
-        bucket
+        bucket,
+        s3_api
     ) = grab_cloudflare_r2_access()
 
-    endpoint_url = (
-        f"https://{account_id}.r2.cloudflarestorage.com"
-    )
+    endpoint_url = s3_api
+    # endpoint_url = (
+    #     f"https://{account_id}.r2.cloudflarestorage.com"
+    # )
 
     client = boto3.client(
         "s3",
@@ -216,3 +223,14 @@ def download_crawl(crawl_id, output_dir):
         )
 
     print(f"Crawl {crawl_id} downloaded.")
+
+def main():
+    #test the r2 connection
+    try:
+        client, bucket = get_r2_client()
+        print(f"Successfully connected to R2 bucket: {bucket}")
+    except Exception as e:
+        print(f"Failed to connect to R2: {e}")
+
+if __name__ == "__main__":
+    main()
