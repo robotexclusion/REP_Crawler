@@ -69,7 +69,7 @@ Note: *This project was created to run on a Linux system, the commands listed fo
 
 Sign up for an api key to pull the TRANCO list from their [website](https://tranco-list.eu/). The email and api key will need to be added to your enviroment variables.
 
-This project includes a `uv.lock` file, intended to be used with uv to set up a virtual enviroment and resolve dependencies. to utilize this file, you will need to install uv on your system.
+This project includes a `uv.lock` file. Install `uv` on your Linux system, then use it to create the virtual environment and install the locked dependencies.
 
 Run the following command to download the project:
 
@@ -83,25 +83,24 @@ Navigate into the project directory:
 cd REP_Crawler
 ```
 
-To set up a virtual envrioment with uv:
+To set up the project with uv:
 
 ```bash
-uv venv rep_crawler
+uv venv --python 3.12
 ```
 
 ```bash
-source rep_crawler/bin/activate
+source .venv/bin/activate
 ```
 
 ```bash
-uv pip install -r requirements.txt
+uv sync --locked
 ```
 
-```bash
-uv sync
-```
+To intentionally refresh dependency versions later, run `uv lock --upgrade`
+and then `uv sync --locked`.
 
-Alternatively, install the requirements without a virtual enviroment:
+Alternatively, install the fallback requirements without uv:
 
 ```bash
 pip install -r requirements.txt
