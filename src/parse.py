@@ -102,10 +102,10 @@ def normalize_directive(value):
 #function to chekc the directive against the standard list to see if it might be malformed or unusual
 def classify_directive(directive, standard_directives):
     if directive == "user-agent":
-        return "USER_AGENT"
+        return "USRAGT"
     if directive in standard_directives:
-        return "STANDARD"
-    return "UNKNOWN"
+        return "STD"
+    return "UNK"
 
 #function to go through the saved robots file and split it out
 def parse_robot_file(

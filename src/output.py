@@ -15,9 +15,9 @@ def generate_crawl_dataframes(
         ):
     
     #filename vars
-    crawl_df_filename = f"{crawl_id}_crawl_data"
-    robots_df_filename = f"{crawl_id}_robots.txt_data"
-    meta_df_filename = f"{crawl_id}_meta_tags_data"
+    crawl_df_filename = f"{crawl_id}_crawl_data.csv"
+    robots_df_filename = f"{crawl_id}_robotstxt_data.csv"
+    meta_df_filename = f"{crawl_id}_meta_tags_data.csv"
 
     #attach databases
     conn = sqlite3.connect(crawl_db_path)
@@ -49,14 +49,8 @@ def generate_crawl_dataframes(
         Select fetches.domain_id,
         fetches.fetch_id,
         domains.master_domain_id,
-        parsed_data.files.filename,
-        parsed_data.files.lines,
-        parsed_data.files.comments,
-        parsed_data.files.blank_lines,
         parsed_data.files.parse_errors,
         parsed_data.groups.group_id,
-        parsed_data.groups.group_number,
-        parsed_data.user_agents.user_agent,
         parsed_data.directives.directive_id,
         parsed_data.directives.directive,
         parsed_data.directives.value,

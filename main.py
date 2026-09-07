@@ -40,6 +40,9 @@ async def main():
         skip_parse = True
         crawl_id = args.crawlid
 
+    if args.noupload:
+        no_upload = True
+    
     print("Starting REP Crawler...")
     if args.autorun:
         print("Autorun enabled")
