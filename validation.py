@@ -1,4 +1,4 @@
-"""Generate reproducible samples for manual and cross-crawl validation."""
+#Program for output sampling for verification  of results
 
 import argparse
 import csv
@@ -6,6 +6,7 @@ import random
 import sqlite3
 from pathlib import Path
 
+#define the columns for the output sample
 SAMPLE_COLUMNS = [
     "domain_name", "https_homepage_url", "https_robots_url",
     "http_homepage_url", "http_robots_url", "crawl_id", "tranco_rank",
@@ -15,13 +16,13 @@ SAMPLE_COLUMNS = [
     "user_agents", "directives", "diagnostics", "meta_tags",
 ]
 
-
+#func for arg parsing
 def setup_arg_parser():
     parser = argparse.ArgumentParser(
         prog="REP Crawler Validation",
         description=(
             "Generate reproducible samples for browser verification and "
-            "cross-crawl comparison."
+            "crawl comparison."
         ),
         usage="python validation.py [options]",
     )
@@ -49,12 +50,12 @@ def setup_arg_parser():
     return parser.parse_args()
 
 
-def _validate_sample_size(num_samples):
+def validate_sample_size(num_samples):
     if num_samples < 1:
         raise ValueError("--numsamples must be at least 1.")
 
 
-def _parse_crawl_ids(values):
+def parse_crawl_ids(values):
     crawl_ids = []
     for value in values:
         crawl_ids.extend(part.strip() for part in value.split(","))
@@ -66,7 +67,7 @@ def _parse_crawl_ids(values):
     return crawl_ids
 
 
-def _crawl_paths(base_dir, crawl_id):
+def crawl_paths(base_dir, crawl_id):
     crawl_dir = Path(base_dir) / crawl_id
     paths = {
         "directory": crawl_dir,
@@ -86,8 +87,8 @@ def _crawl_paths(base_dir, crawl_id):
     return paths
 
 
-def _connect_crawl(base_dir, crawl_id):
-    paths = _crawl_paths(base_dir, crawl_id)
+def connect_crawl(base_dir, crawl_id):
+    paths = crawl_paths(base_dir, crawl_id)
     connection = sqlite3.connect(paths["crawl_db"])
     connection.row_factory = sqlite3.Row
     connection.execute(
@@ -101,14 +102,14 @@ def _connect_crawl(base_dir, crawl_id):
     return connection, paths["directory"]
 
 
-def _sample_indices(row_count, num_samples, seed_value):
+def sample_indices(row_count, num_samples, seed_value):
     sample_size = min(num_samples, row_count)
     if sample_size == 0:
         return []
     return sorted(random.Random(seed_value).sample(range(row_count), sample_size))
 
 
-def _create_sample_table(connection, domains):
+def create_sample_table(connection, domains):
     connection.execute(
         "CREATE TEMP TABLE validation_sample "
         "(sample_index INTEGER PRIMARY KEY, domain_name TEXT UNIQUE NOT NULL)"
@@ -119,7 +120,7 @@ def _create_sample_table(connection, domains):
     )
 
 
-def _available_domains(connection):
+def available_domains(connection):
     return [
         row[0]
         for row in connection.execute(
@@ -137,14 +138,14 @@ def _available_domains(connection):
     ]
 
 
-def _common_domains(base_dir, crawl_ids):
-    first_connection, _ = _connect_crawl(base_dir, crawl_ids[0])
+def common_domains(base_dir, crawl_ids):
+    first_connection, _ = connect_crawl(base_dir, crawl_ids[0])
     aliases = []
     try:
         for index, crawl_id in enumerate(crawl_ids[1:], start=1):
             alias = f"crawl_{index}"
             aliases.append(alias)
-            paths = _crawl_paths(base_dir, crawl_id)
+            paths = crawl_paths(base_dir, crawl_id)
             first_connection.execute(
                 f"ATTACH DATABASE ? AS {alias}",
                 (str(paths["crawl_db"]),),
@@ -176,7 +177,7 @@ def _common_domains(base_dir, crawl_ids):
         first_connection.close()
 
 
-def _fetch_sample_rows(connection):
+def fetch_sample_rows(connection):
     query = """
         SELECT
             sample.sample_index,
@@ -244,7 +245,7 @@ def _fetch_sample_rows(connection):
     return rows
 
 
-def _write_sample(rows, output_path):
+def write_sample(rows, output_path):
     with output_path.open("w", encoding="utf-8", newline="") as output:
         writer = csv.DictWriter(
             output, fieldnames=SAMPLE_COLUMNS, extrasaction="ignore"
@@ -253,35 +254,35 @@ def _write_sample(rows, output_path):
         writer.writerows(rows)
 
 
-def _sample_crawl(base_dir, crawl_id, domains, output_name):
-    connection, crawl_dir = _connect_crawl(base_dir, crawl_id)
+def sample_crawl(base_dir, crawl_id, domains, output_name):
+    connection, crawl_dir = connect_crawl(base_dir, crawl_id)
     try:
-        _create_sample_table(connection, domains)
-        rows = _fetch_sample_rows(connection)
+        create_sample_table(connection, domains)
+        rows = fetch_sample_rows(connection)
         output_path = crawl_dir / output_name
-        _write_sample(rows, output_path)
+        write_sample(rows, output_path)
         return rows, output_path
     finally:
         connection.close()
 
-
+#single crawl validation generation
 def single_crawl_validation(seed_value, num_samples, base_dir, crawl_id):
-    connection, _ = _connect_crawl(base_dir, crawl_id)
+    connection, _ = connect_crawl(base_dir, crawl_id)
     try:
-        available = _available_domains(connection)
+        available = available_domains(connection)
     finally:
         connection.close()
 
-    indices = _sample_indices(len(available), num_samples, seed_value)
+    indices = sample_indices(len(available), num_samples, seed_value)
     domains = [available[index] for index in indices]
-    rows, output_path = _sample_crawl(
+    rows, output_path = sample_crawl(
         base_dir, crawl_id, domains, f"validation_sample_{crawl_id}.csv"
     )
     print(f"Saved {len(rows)} domains to {output_path}")
     return output_path
 
-
-def _write_comparison(rows_by_crawl, domains, output_path):
+#check if the results from the first crawl match the second one
+def write_comparison(rows_by_crawl, domains, output_path):
     fields = ["domain_name", "https_homepage_url", "https_robots_url"]
     for crawl_id in rows_by_crawl:
         fields.extend([
@@ -315,14 +316,15 @@ def _write_comparison(rows_by_crawl, domains, output_path):
             writer.writerow(record)
 
 
+#validation for multiple crawls
 def multiple_crawl_validation(seed_value, num_samples, base_dir, crawl_ids):
-    domains = _common_domains(base_dir, crawl_ids)
-    indices = _sample_indices(len(domains), num_samples, seed_value)
+    domains = common_domains(base_dir, crawl_ids)
+    indices = sample_indices(len(domains), num_samples, seed_value)
     selected_domains = [domains[index] for index in indices]
     rows_by_crawl = {}
 
     for crawl_id in crawl_ids:
-        rows, output_path = _sample_crawl(
+        rows, output_path = sample_crawl(
             base_dir,
             crawl_id,
             selected_domains,
@@ -334,14 +336,14 @@ def multiple_crawl_validation(seed_value, num_samples, base_dir, crawl_ids):
     comparison_path = Path(base_dir) / (
         "validation_comparison_" + "_".join(crawl_ids) + ".csv"
     )
-    _write_comparison(rows_by_crawl, selected_domains, comparison_path)
-    print(f"Saved cross-crawl comparison to {comparison_path}")
+    write_comparison(rows_by_crawl, selected_domains, comparison_path)
+    print(f"Saved crawl comparison to {comparison_path}")
     return comparison_path
 
-
+#main func
 def main():
     args = setup_arg_parser()
-    _validate_sample_size(args.numsamples)
+    validate_sample_size(args.numsamples)
     seed_value = (
         args.seedvalue
         if args.seedvalue is not None
@@ -355,11 +357,11 @@ def main():
             seed_value, args.numsamples, args.data_dir, args.single
         )
     else:
-        crawl_ids = _parse_crawl_ids(args.multiple)
+        crawl_ids = parse_crawl_ids(args.multiple)
         multiple_crawl_validation(
             seed_value, args.numsamples, args.data_dir, crawl_ids
         )
 
-
+#run
 if __name__ == "__main__":
     main()

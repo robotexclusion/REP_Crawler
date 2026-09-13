@@ -13,13 +13,14 @@ from bs4 import BeautifulSoup
 from src.parse import StreamingRobotParser
 from src.startup import checkpoint_crawl
 
+#global vars
 MAX_ROBOTS_BYTES = int(os.environ.get("REP_MAX_ROBOTS_BYTES", 8 * 1024 * 1024))
 MAX_HTML_BYTES = int(os.environ.get("REP_MAX_HTML_BYTES", 2 * 1024 * 1024))
 MAX_META_TAGS = int(os.environ.get("REP_MAX_META_TAGS", 200))
 MAX_META_TAG_VALUE_BYTES = int(os.environ.get("REP_MAX_META_TAG_VALUE_BYTES", 8192))
 MAX_META_TOTAL_BYTES = int(os.environ.get("REP_MAX_META_TOTAL_BYTES", 8192))
 
-
+#function to truncate meta values
 def _truncate_meta_value(value, limit):
     if value is None:
         return None
@@ -30,6 +31,7 @@ def _truncate_meta_value(value, limit):
     return trimmed + "..."
 
 
+#function to parse meta rules
 def _parse_meta_robots_value(value):
     raw = (value or "").strip()
     if not raw:
@@ -344,6 +346,7 @@ async def process_domain(
 
     robot_parser = None
 
+    #function to consume robot chunks
     async def consume_robot_chunk(chunk):
         nonlocal robot_parser
         async with db_lock:
@@ -454,6 +457,7 @@ async def run_crawl(
         if batch:
             await tqdm_asyncio.gather(*batch)
 
+#function to run main crawl
 async def main_crawl_func(
         args,
         domains_df,

@@ -4,32 +4,25 @@ Web crawler to examine Robots Exclusion Protocol (REP) implementation in the top
 
 ## Description
 
-<p>Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify the top web domains, and then queries them for Robots Exclusion Protocol (REP) implementations aligning with [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html), as well as \<meta\> tags in HTML text described by the [Web Robots Pages](https://www.robotstxt.org/). Crawl data is stored in `/data` as SQLite databases and CSV files. The validation script creates small samples for manual browser checks.</p>
-<p>Crawl result directories are included in `.gitignore` because a full crawl creates a lot of data. At the end of a crawl, the databases and CSV files are compressed and uploaded to the connected Cloudflare R2 bucket.</p>
+Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify the top web domains, and then queries them for Robots Exclusion Protocol (REP) implementations aligning with [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html), as well as \<meta\> tags in HTML text described by the [Web Robots Pages](https://www.robotstxt.org/). Crawl data is stored in `/data` as SQLite databases and CSV files. The validation script creates small samples for manual browser checks. Crawl result directories are included in `.gitignore` because a full crawl creates a lot of data. At the end of a crawl, the databases and CSV files are compressed and uploaded to the connected Cloudflare R2 bucket.
+
 
 ## Functions
 
 - `python main.py` runs the user agent and performs the web crawl.
-- `python validation.py` generates reproducible samples for manual validation in a web browser and comparisons between crawls.
-  
-All data from the web crawls is stored in `/data`. Robots.txt responses are parsed while they are being downloaded, so the crawler retains parsed results and metadata instead of saving a separate file for every response. After output generation, `main.py` compresses the databases and CSV files and uploads them to the connected Cloudflare R2 bucket.
-
-Robots directive records retain the normalized directive, value, source line,
-and raw line. `Allow` and `Disallow` are classified as `RFC9309`,
-`User-agent` as `USRAGT`, known non-RFC records such as `Sitemap` and
-`Crawl-delay` as `EXTENSION`, and other records as `UNKNOWN`. Diagnostics retain
-invalid UTF-8, control characters, invalid product tokens, invalid path
-patterns, missing separators, and other parse conditions without discarding the
-original directive line.
-
-Meta robots tags are collected only from the domain index HTML. Their raw
-content and parsed tokens are retained. Formatting errors, unknown tokens, and
-conflicting rules are recorded separately so a well-formed but contradictory
-tag is not mislabeled as syntactically malformed.
-
+- `python src/validation.py` generates reproducible samples for manual validation in a web browser and comparisons between crawls.
+- `python src/r2.py` tests the r2 enviroment variables and cloud database connection.
 - `/data/domains.sqlite` stores the IDs of all domains ever queried.
 - `/data/[crawl_id]` stores the data for an individual crawl. Crawl IDs are based on the timestamp when `main.py` starts.
 - `/data/[crawl_id]/output` stores the CSV outputs for that crawl.
+  
+All data from the web crawls is stored in `/data`. Robots.txt responses are parsed while they are being downloaded.The crawler retains parsed results and metadata instead of saving a separate file for every response. After output generation, `main.py` compresses the databases and CSV files and uploads them to the connected Cloudflare R2 bucket.
+
+Robots directive records retain the normalized directive, value, source line, and raw line. `Allow` and `Disallow` are classified as `RFC9309`, `User-agent` as `USRAGT`, known non-RFC records such as `Sitemap` and `Crawl-delay` as `EXTENSION`, and other records as `UNKNOWN`. Diagnostics retain invalid UTF-8, control characters, invalid product tokens, invalid path patterns, missing separators, and other parse conditions without discarding the original directive line.
+
+Meta tags are collected only from the domain index HTML. Their raw content and parsed tokens are retained.
+
+A robots response is limited to 8 MiB by default so an unbounded response cannot exhaust memory. To change the limit, set `REP_MAX_ROBOTS_BYTES`. The HTML response is limited to 2 MiB by default; `REP_MAX_HTML_BYTES`, `REP_MAX_META_TAGS`, `REP_MAX_META_TAG_VALUE_BYTES`, and `REP_MAX_META_TOTAL_BYTES` can be used to adjust the meta-tag limits. Responses over the robots limit are marked `ROBOTS_TOO_LARGE`.
 
 ## Data layout
 
@@ -43,27 +36,26 @@ tag is not mislabeled as syntactically malformed.
 	- `[crawl_id]_robotstxt_data.csv`
 	- `[crawl_id]_meta_tags_data.csv`
 
-The crawler does not retain complete robots.txt or HTML response bodies. Robots
-content is parsed as it is read. Index HTML is capped before meta-tag extraction,
-and robots.txt content is capped before parsing.
-
 ## Dependencies
 
-The project uses `uv.lock` for the locked dependency set. The main runtime
-dependencies are `aiohttp`, `beautifulsoup4`, `boto3`, `python-dotenv`,
-`requests`, and `tqdm`.
+- aiohttp
+- beautifulsoup4
+- boto3
+- python-dotenv
+- requests
+- tqdm
 
 ## Arguments
 
 For `main.py`:
 
 - `-h, --help` shows information about program and arguments then exits.
-- `-a, --autorun` skips user verification of process steps, running the entire program automatically.
+- `-a, --autorun` skips user verification of process steps, running the entire program automatically. By default, the program will ask for user confirmation at the start of each step.
 - `-o [crawl_id], --output [crawl_id]` skips crawling and generates output data using a given crawl ID directory. Robots and meta-tag parsing happen during the crawl.
 - `-c [crawl_id], --crawlid [crawl_id]` provides the crawl ID when using output or resume options.
 - `-u, --noupload` skips uploading the crawl data to the connected R2 bucket.
 - `--max-domains [value]` limits the number of domains in a crawl. The default is 100, and `0` runs the full Tranco list.
-- `--resume` resumes an interrupted crawl using its saved Tranco snapshot. This option requires `--crawlid`.
+- `-r [crawl_id], --resume [crawl_id]` resumes an interrupted crawl using its saved Tranco snapshot.
 
 For `validation.py`:
 
@@ -101,7 +93,7 @@ For R2 uploads, also set `CLOUDFLARE_R2_ACCOUNT_ID`,
 `CLOUDFLARE_R2_BUCKET`, and `CLOUDFLARE_R2_S3_API`. Use `--noupload` when
 working locally without R2 credentials.
 
-This project includes a `uv.lock` file. Install `uv` on your Linux system, then use it to create the virtual environment and install the locked dependencies.
+This project includes a `uv.lock` file. Install `uv` on your Linux system, then use it to create the virtual environment and install the locked dependencies if desired.
 
 Run the following command to download the project:
 
@@ -144,14 +136,7 @@ Run the main crawler:
 python main.py
 ```
 
-The crawler parses robots responses while they are streamed and retains only
-parsed SQLite rows and metadata. A robots response is limited to 8 MiB by
-default so an unbounded response cannot exhaust memory. To change the limit,
-set `REP_MAX_ROBOTS_BYTES`. The HTML response is limited to 2 MiB by default;
-`REP_MAX_HTML_BYTES`, `REP_MAX_META_TAGS`, `REP_MAX_META_TAG_VALUE_BYTES`, and
-`REP_MAX_META_TOTAL_BYTES` can be used to adjust the meta-tag limits. Responses
-over the robots limit are marked `ROBOTS_TOO_LARGE` and retain their truncation
-status and parser diagnostics.
+
 
 Progress is checkpointed after each completed domain. If a crawl stops, resume
 it with:
@@ -159,8 +144,3 @@ it with:
 ```bash
 python main.py --autorun --resume --crawlid 202609071731 --max-domains 0 --noupload
 ```
-
-The saved Tranco snapshot is reused, completed ranks are skipped, and any
-incomplete fetch rows and parsed rows from the interrupted run are discarded
-before retrying. Checkpoints keep the highest completed rank and the completed
-domain count.

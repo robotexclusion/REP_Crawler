@@ -6,6 +6,8 @@ import argparse
 import requests
 import sqlite3
 import csv
+
+#grab the dotenv if there is one
 try:
     from dotenv import load_dotenv
 except ImportError:
@@ -36,7 +38,7 @@ def setup_arg_parser():
     parser.add_argument("-u", "--noupload",
                         action="store_true",
                         help = "Don't upload the crawl data to the connected R2 bucket")
-    parser.add_argument("--resume",
+    parser.add_argument("-r", "--resume",
                         action="store_true",
                         help="Resume an interrupted crawl using its saved Tranco snapshot.")
     parser.add_argument("--max-domains",
@@ -47,6 +49,7 @@ def setup_arg_parser():
     #parse cli args
     args = parser.parse_args()
 
+    #make sure we got valid combos of args
     if (args.output or args.resume) and not args.crawlid:
         raise ValueError(
             "A crawl ID is required when using --output or --resume."
@@ -71,6 +74,7 @@ def get_latest_tranco_list():
     )
     response.raise_for_status()
     data = response.json()
+
     #throw an error if not available
     if not data.get("available"):
         raise RuntimeError(
@@ -101,8 +105,8 @@ def download_latest_tranco_list(crawl_dir):
     print(f"Saved Tranco list to: {tranco_file}")
     return tranco_file
 
+#stream the Tranco list instead of loading the full into meemory
 def iter_tranco_domains(tranco_file, max_domains=None):
-    """Yield Tranco rows without loading the complete list into memory."""
     with open(tranco_file, "r", encoding="utf-8", newline="") as source:
         reader = csv.reader(source)
         for row_number, row in enumerate(reader, start=1):
@@ -198,25 +202,13 @@ def create_crawl_database(crawl_db_path):
     )
     """)
 
-    for table, column, definition in (
-        ("crawl", "status", "TEXT DEFAULT 'created'"),
-        ("crawl", "last_rank", "INTEGER"),
-        ("crawl", "completed_domains", "INTEGER DEFAULT 0"),
-        ("crawl", "checkpointed_at", "TEXT"),
-        ("fetches", "completed", "INTEGER NOT NULL DEFAULT 0"),
-        ("fetches", "policy_hash", "TEXT"),
-        ("fetches", "truncated", "INTEGER NOT NULL DEFAULT 0"),
-    ):
-        columns = {row[1] for row in cur.execute(f"PRAGMA table_info({table})")}
-        if column not in columns:
-            cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
-
     #commit and return
     conn.commit()
     cur.close()
     print(f"Created crawl database at: {crawl_db_path}")
     return conn
 
+#update the crawl db with start and finish times
 def start_crawl(conn, crawl_id):
     conn.execute(
         "INSERT OR IGNORE INTO crawl(crawl_id, started, status) VALUES (?, datetime('now'), 'created')",
@@ -235,6 +227,7 @@ def finish_crawl(conn, crawl_id):
     )
     conn.commit()
 
+#checkpoint caching
 def checkpoint_crawl(conn, crawl_id, rank):
     conn.execute(
         """UPDATE crawl SET last_rank=MAX(COALESCE(last_rank, 0), ?),
@@ -244,6 +237,7 @@ def checkpoint_crawl(conn, crawl_id, rank):
     )
     conn.commit()
 
+#check completed
 def completed_ranks(conn, crawl_id):
     return {
         rank for (rank,) in conn.execute(
@@ -252,37 +246,12 @@ def completed_ranks(conn, crawl_id):
         )
     }
 
-def discard_incomplete_fetches(conn, parsed_conn, crawl_id):
-    fetch_ids = [
-        fetch_id for (fetch_id,) in conn.execute(
-            "SELECT fetch_id FROM fetches WHERE crawl_id=? AND completed=0",
-            (crawl_id,)
-        )
-    ]
-    for fetch_id in fetch_ids:
-        for table, column in (("files", "fetch_id"),):
-            parsed_conn.execute(
-                f"DELETE FROM {table} WHERE {column}=?",
-                (fetch_id,)
-            )
-        parsed_conn.execute(
-            "DELETE FROM user_agents WHERE group_id IN "
-            "(SELECT group_id FROM groups WHERE fetch_id=?)",
-            (fetch_id,)
-        )
-        parsed_conn.execute(
-            "DELETE FROM directives WHERE group_id IN "
-            "(SELECT group_id FROM groups WHERE fetch_id=?)",
-            (fetch_id,)
-        )
-        parsed_conn.execute("DELETE FROM groups WHERE fetch_id=?", (fetch_id,))
-    parsed_conn.commit()
-    conn.execute(
-        "DELETE FROM fetches WHERE crawl_id=? AND completed=0",
+#check how many were not completed
+def count_incomplete_fetches(conn, crawl_id):
+    return conn.execute(
+        "SELECT COUNT(*) FROM fetches WHERE crawl_id=? AND completed=0",
         (crawl_id,)
-    )
-    conn.commit()
-    return len(fetch_ids)
+    ).fetchone()[0]
 
 #Function to update the main domain name db file before running
 def prime_main_domain_db(master_conn, df):

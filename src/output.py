@@ -162,7 +162,7 @@ def generate_crawl_dataframes(
     print(f"Output data saved for crawl '{crawl_id}' in '{output_dir}'")
     return
 
-
+#main output logic
 def main_output_func(
         args,
         master_domain_db_path,

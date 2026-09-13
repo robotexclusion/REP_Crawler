@@ -1,26 +1,15 @@
 #REP CRAWLER
+#MAIN FILE FOR CRAWLER
 
 #imports
 import os
 import sqlite3
 import asyncio
-from src.crawler import main_crawl_func
-from src.startup import (
-    completed_ranks,
-    create_crawl_database,
-    create_domain_database,
-    discard_incomplete_fetches,
-    download_latest_tranco_list,
-    finish_crawl,
-    iter_pending_tranco_domains,
-    iter_tranco_domains,
-    prime_main_domain_db,
-    setup_arg_parser,
-    start_crawl,
-)
-from src.parse import create_parser_database
-from src.output import dump_master_domains_csv, main_output_func
-from src.r2 import upload_crawl
+from src.crawler import *
+from src.startup import *
+from src.parse import *
+from src.output import *
+from src.r2 import *
 from pathlib import Path
 from datetime import datetime
 from types import SimpleNamespace
@@ -51,7 +40,8 @@ async def main():
 
     if args.noupload:
         no_upload = True
-    
+
+    #Vars sset, start setting up crawler
     print("Starting REP Crawler...")
     if args.autorun:
         print("Autorun enabled")
@@ -84,6 +74,7 @@ async def main():
     crawl_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    #if new crawl
     if not skip_crawl and not args.resume:
         #Get TRANCO
         print("Downloading latest Tranco list...")
@@ -122,9 +113,9 @@ async def main():
 
     parsed_conn = create_parser_database(parsed_db_path)
     if args.resume:
-        discarded = discard_incomplete_fetches(conn, parsed_conn, crawl_id)
-        if discarded:
-            print(f"Discarded {discarded} incomplete fetch checkpoints.")
+        incomplete = count_incomplete_fetches(conn, crawl_id)
+        if incomplete:
+            print(f"Retaining {incomplete} incomplete fetch checkpoints.")
 
     print("Ready")
 
@@ -174,14 +165,9 @@ async def main():
     if not no_upload:
         upload_crawl(crawl_id, base_dir)
 
-
+    #finished
     print("Process complete. Exiting...")
     return
 
-#run the main function
-def cli():
-    asyncio.run(main())
-
-
 if __name__ == "__main__":
-    cli()
+    asyncio.run(main())

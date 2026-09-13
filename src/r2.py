@@ -6,6 +6,8 @@ import gzip
 import shutil
 import boto3
 from pathlib import Path
+
+#try to  grab a dotenv file
 try:
     from dotenv import load_dotenv
 except ImportError:

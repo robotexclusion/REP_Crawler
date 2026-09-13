@@ -1,18 +1,20 @@
-"""Streaming REP parsing and internal staging tables."""
+#Holds functions related to parsing the gathered data
 
 import codecs
 import hashlib
 import re
 import sqlite3
 
+#global rules for parsing directives
 RFC9309_RULES = {"allow", "disallow"}
 EXTENSION_DIRECTIVES = {"sitemap", "crawl-delay", "host", "clean-param"}
 PRODUCT_TOKEN_PATTERN = re.compile(r"^(?:\*|[-A-Za-z_]+)$")
 
-
+#function to create parser database
 def create_parser_database(parsed_db_path):
     connection = sqlite3.connect(parsed_db_path)
     connection.executescript("""
+
         CREATE TABLE IF NOT EXISTS files (
             fetch_id INTEGER PRIMARY KEY,
             sha256 TEXT,
@@ -23,15 +25,21 @@ def create_parser_database(parsed_db_path):
             parse_errors INTEGER,
             truncated INTEGER DEFAULT 0
         );
+
+        #table to store robots target groups
         CREATE TABLE IF NOT EXISTS groups (
             group_id INTEGER PRIMARY KEY AUTOINCREMENT,
             fetch_id INTEGER NOT NULL,
             group_number INTEGER NOT NULL
         );
+        
+        #table to store the user agent names
         CREATE TABLE IF NOT EXISTS user_agents (
             group_id INTEGER NOT NULL,
             user_agent TEXT NOT NULL
         );
+
+        #table to store the directuves and their classifications
         CREATE TABLE IF NOT EXISTS directives (
             directive_id INTEGER PRIMARY KEY AUTOINCREMENT,
             group_id INTEGER NOT NULL,
@@ -41,6 +49,8 @@ def create_parser_database(parsed_db_path):
             classification TEXT NOT NULL,
             raw TEXT NOT NULL
         );
+
+        #table to store errors
         CREATE TABLE IF NOT EXISTS diagnostics (
             diagnostic_id INTEGER PRIMARY KEY AUTOINCREMENT,
             fetch_id INTEGER NOT NULL,
@@ -56,11 +66,11 @@ def create_parser_database(parsed_db_path):
     connection.commit()
     return connection
 
-
+#function to normalize directives
 def normalize_directive(value):
     return value.strip().lower()
 
-
+#check the attached directive and determine if it is valid
 def classify_directive(directive):
     if directive == "user-agent":
         return "USRAGT"
@@ -70,10 +80,10 @@ def classify_directive(directive):
         return "EXTENSION"
     return "UNKNOWN"
 
-
+#Class for streaming the robots.txt file without downloading
 class StreamingRobotParser:
-    """Parse robots.txt chunks without retaining the response body."""
 
+    #function to initialize parser
     def __init__(self, fetch_id, parsed_conn):
         self.fetch_id = fetch_id
         self.connection = parsed_conn
@@ -92,6 +102,7 @@ class StreamingRobotParser:
         self.group_has_directive = False
         self._clear_previous_rows()
 
+    #function to clear previous rows
     def _clear_previous_rows(self):
         self.cursor.execute(
             "DELETE FROM user_agents WHERE group_id IN "
@@ -107,6 +118,7 @@ class StreamingRobotParser:
         self.cursor.execute("DELETE FROM diagnostics WHERE fetch_id=?", (self.fetch_id,))
         self.cursor.execute("DELETE FROM files WHERE fetch_id=?", (self.fetch_id,))
 
+    #function to record diagnostics
     def _diagnostic(self, code, severity, raw, directive, value, message):
         self.errors += 1
         self.cursor.execute(
@@ -120,6 +132,7 @@ class StreamingRobotParser:
             )
         )
 
+    #function to feed parser chunks
     def feed(self, chunk):
         self.byte_count += len(chunk)
         self.raw_hasher.update(chunk)
@@ -136,6 +149,7 @@ class StreamingRobotParser:
             self._parse_line(line.rstrip("\r"))
         self.connection.commit()
 
+    #function to parse lines
     def _parse_line(self, raw):
         self.line_count += 1
         stripped = raw.strip()
@@ -230,6 +244,7 @@ class StreamingRobotParser:
         )
         self.group_has_directive = directive in RFC9309_RULES
 
+    #finalize parsing
     def finish(self, truncated=False):
         tail = self.decoder.decode(b"", final=True)
         if tail.count("\ufffd"):
