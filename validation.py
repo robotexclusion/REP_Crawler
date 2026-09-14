@@ -8,10 +8,12 @@ from pathlib import Path
 
 #define the columns for the output sample
 SAMPLE_COLUMNS = [
-    "domain_name", "https_homepage_url", "https_robots_url",
-    "http_homepage_url", "http_robots_url", "crawl_id", "tranco_rank",
-    "timestamp", "protocol", "status_code", "result", "content_type",
-    "response_time_ms", "bytes", "sha256", "policy_hash", "truncated",
+    "domain_name", "https_homepage_url",
+    "crawl_id", "tranco_rank",
+    "timestamp", "protocol", "status_code", "result", "index_content_type",
+    "index_response_status", "index_truncated", "has_robots",
+    "meta_tags_truncated", "robots_truncated",
+    "response_time_ms", "bytes", "sha256", "policy_hash",
     "completed", "parse_errors", "lines", "comments", "blank_lines",
     "user_agents", "directives", "diagnostics", "meta_tags",
 ]
@@ -188,12 +190,16 @@ def fetch_sample_rows(connection):
             fetches.protocol,
             fetches.status_code,
             fetches.result,
-            fetches.content_type,
+            fetches.index_content_type,
+            fetches.index_response_status,
+            fetches.index_truncated,
+            fetches.has_robots,
             fetches.response_time_ms,
             fetches.bytes,
             fetches.sha256,
             fetches.policy_hash,
-            fetches.truncated,
+            fetches.truncated AS robots_truncated,
+            fetches.meta_tags_truncated,
             fetches.completed,
             parsed_data.files.parse_errors,
             parsed_data.files.lines,
@@ -238,9 +244,6 @@ def fetch_sample_rows(connection):
     for row in connection.execute(query):
         item = dict(row)
         item["https_homepage_url"] = f"https://{item['domain_name']}"
-        item["https_robots_url"] = f"https://{item['domain_name']}/robots.txt"
-        item["http_homepage_url"] = f"http://{item['domain_name']}"
-        item["http_robots_url"] = f"http://{item['domain_name']}/robots.txt"
         rows.append(item)
     return rows
 
@@ -283,12 +286,15 @@ def single_crawl_validation(seed_value, num_samples, base_dir, crawl_id):
 
 #check if the results from the first crawl match the second one
 def write_comparison(rows_by_crawl, domains, output_path):
-    fields = ["domain_name", "https_homepage_url", "https_robots_url"]
+    fields = ["domain_name", "https_homepage_url"]
     for crawl_id in rows_by_crawl:
         fields.extend([
             f"{crawl_id}_result", f"{crawl_id}_status_code",
             f"{crawl_id}_protocol", f"{crawl_id}_sha256",
             f"{crawl_id}_policy_hash", f"{crawl_id}_bytes",
+            f"{crawl_id}_has_robots", f"{crawl_id}_robots_truncated",
+            f"{crawl_id}_index_truncated",
+            f"{crawl_id}_meta_tags_truncated",
             f"{crawl_id}_parse_errors", f"{crawl_id}_diagnostics",
             f"{crawl_id}_meta_tags",
         ])
@@ -305,7 +311,6 @@ def write_comparison(rows_by_crawl, domains, output_path):
             record = {
                 "domain_name": domain,
                 "https_homepage_url": first["https_homepage_url"],
-                "https_robots_url": first["https_robots_url"],
             }
             for crawl_id, crawl_rows in indexed.items():
                 row = crawl_rows[domain]

@@ -18,11 +18,13 @@ Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify 
   
 All data from the web crawls is stored in `/data`. Robots.txt responses are parsed while they are being downloaded.The crawler retains parsed results and metadata instead of saving a separate file for every response. After output generation, `main.py` compresses the databases and CSV files and uploads them to the connected Cloudflare R2 bucket.
 
-Robots directive records retain the normalized directive, value, source line, and raw line. `Allow` and `Disallow` are classified as `RFC9309`, `User-agent` as `USRAGT`, known non-RFC records such as `Sitemap` and `Crawl-delay` as `EXTENSION`, and other records as `UNKNOWN`. Diagnostics retain invalid UTF-8, control characters, invalid product tokens, invalid path patterns, missing separators, and other parse conditions without discarding the original directive line.
+Robots directive records retain the normalized directive, value, source line, and raw line. `Allow` and `Disallow` are classified as `RFC9309`, `User-agent` as `USRAGT`, known non-RFC records such as `Sitemap` and `Crawl-delay` as `EXTENSION`, and other records as `UNKNOWN`. Diagnostics retain invalid UTF-8, control characters, invalid agent tokens, invalid path patterns, missing separators, and other parse conditions without discarding the original directive line.
 
-Meta tags are collected only from the domain index HTML. Their raw content and parsed tokens are retained.
+Meta tags are collected only from the domain index HTML. Their raw content and parsed tokens are retained. 
 
-A robots response is limited to 8 MiB by default so an unbounded response cannot exhaust memory. To change the limit, set `REP_MAX_ROBOTS_BYTES`. The HTML response is limited to 2 MiB by default; `REP_MAX_HTML_BYTES`, `REP_MAX_META_TAGS`, `REP_MAX_META_TAG_VALUE_BYTES`, and `REP_MAX_META_TOTAL_BYTES` can be used to adjust the meta-tag limits. Responses over the robots limit are marked `ROBOTS_TOO_LARGE`.
+A robots.txt response is limited to 8 MiB by default so an unbounded response cannot exhaust memory. To change the limit, set `REP_MAX_ROBOTS_BYTES`. The HTML response is limited to 2 MiB by default; `REP_MAX_HTML_BYTES`, `REP_MAX_META_TAGS`, `REP_MAX_META_TAG_VALUE_BYTES`, and `REP_MAX_META_TOTAL_BYTES` can be used to adjust the meta-tag limits. Responses over the robots limit are marked `ROBOTS_TOO_LARGE`.
+
+`index_truncated` indicates that the homepage exceeded the HTML read limit; `meta_tags_truncated` indicates that individual tags exceeded the limit. `truncated` in crawl data refers to the robots.txt response.
 
 ## Data layout
 
@@ -31,9 +33,10 @@ A robots response is limited to 8 MiB by default so an unbounded response cannot
 - `/data/[crawl_id]/tranco_list_*.csv` is the saved Tranco snapshot used for that crawl.
 - `/data/[crawl_id]/metadata.sqlite` stores crawl state, domain IDs, fetch results, response metadata, hashes, and checkpoints.
 - `/data/[crawl_id]/parsed.sqlite` stores robots groups, user agents, directives, and diagnostics.
-- `/data/[crawl_id]/output/` stores the three generated CSV files:
+- `/data/[crawl_id]/output/` stores the generated CSV files:
 	- `[crawl_id]_crawl_data.csv`
 	- `[crawl_id]_robotstxt_data.csv`
+	- `[crawl_id]_diagnostics_data.csv`
 	- `[crawl_id]_meta_tags_data.csv`
 
 ## Dependencies
@@ -55,7 +58,7 @@ For `main.py`:
 - `-c [crawl_id], --crawlid [crawl_id]` provides the crawl ID when using output or resume options.
 - `-u, --noupload` skips uploading the crawl data to the connected R2 bucket.
 - `--max-domains [value]` limits the number of domains in a crawl. The default is 100, and `0` runs the full Tranco list.
-- `-r [crawl_id], --resume [crawl_id]` resumes an interrupted crawl using its saved Tranco snapshot.
+- `-r, --resume` resumes an interrupted crawl using its saved Tranco snapshot. You will need to provide a `crawl_id` with the `-c` argument.
 
 For `validation.py`:
 
@@ -65,10 +68,7 @@ For `validation.py`:
 - `-n [value], --numsamples [value]` sets the number of domains to sample. The default is 100.
 - `--data-dir [path]` sets the root data directory. The default is `./data`.
 
-Validation samples include direct HTTP and HTTPS homepage and `robots.txt` URLs,
-recorded response metadata, parsed robots directives and diagnostics, and the
-captured meta tags. Multiple-crawl validation samples the same completed domain
-set in every requested crawl and also writes a combined comparison CSV.
+Validation samples include URLs, recorded response metadata, parsed robots directives,  diagnostic determination of rules, and the captured meta tags. Multiple-crawl validation samples the same completed domain set in every requested crawl and also writes a combined comparison CSV.
 
 Example:
 
@@ -81,19 +81,11 @@ python validation.py --multiple 202609071849 202609071900 --seedvalue 42
 
 Note: *This project was created to run on a Linux system, the commands listed for your OS may differ*
 
-Sign up for an API key to pull the TRANCO list from their [website](https://tranco-list.eu/). Add the email and API token to your environment variables:
+Sign up for an API key to pull the TRANCO list from their [website](https://tranco-list.eu/). Add the email and API token to your environment variables.
 
-```bash
-export TRANCO_EMAIL="your-email"
-export TRANCO_API_TOKEN="your-token"
-```
+For R2 uploads, also set `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET`, and `CLOUDFLARE_R2_S3_API`. Use `--noupload` when working locally without R2 credentials.
 
-For R2 uploads, also set `CLOUDFLARE_R2_ACCOUNT_ID`,
-`CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`,
-`CLOUDFLARE_R2_BUCKET`, and `CLOUDFLARE_R2_S3_API`. Use `--noupload` when
-working locally without R2 credentials.
-
-This project includes a `uv.lock` file. Install `uv` on your Linux system, then use it to create the virtual environment and install the locked dependencies if desired.
+This project includes a `uv.lock` file. Install `uv` on your system, then use it to create the virtual environment and install the locked dependencies if desired.
 
 Run the following command to download the project:
 
@@ -130,13 +122,13 @@ Alternatively, install the fallback requirements without uv:
 pip install -r requirements.txt
 ```
 
+## Operation
+
 Run the main crawler:
 
 ```bash
 python main.py
 ```
-
-
 
 Progress is checkpointed after each completed domain. If a crawl stops, resume
 it with:

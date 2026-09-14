@@ -118,33 +118,39 @@ def get_domain_id(conn, master_conn, domain):
 
 #function to check what the content type of the domain is
 def get_content_type(response):
-    content_type = response.headers.get("Content-Type", "").lower()
+    index_content_type = response.headers.get("Content-Type", "").lower()
 
-    return content_type
+    return index_content_type
 
 #function to check if the domain we contacted is html, and if so check if it has meta robots tags
 async def check_meta_tags(response):
     html_bytes = await response.content.read(MAX_HTML_BYTES + 1)
-    if len(html_bytes) > MAX_HTML_BYTES:
+    index_truncated = len(html_bytes) > MAX_HTML_BYTES
+    if index_truncated:
         html_bytes = html_bytes[:MAX_HTML_BYTES]
     html = html_bytes.decode(response.charset or "utf-8", errors="ignore")
     soup = BeautifulSoup(html, "html.parser")
 
     meta_tags_search = soup.find_all("meta")
     if not meta_tags_search:
-        return None
+        return [], index_truncated, index_truncated
 
     meta_tags = []
+    meta_tags_truncated = index_truncated
     retained_bytes = 0
     for ordinal, tag in enumerate(meta_tags_search, start=1):
         if len(meta_tags) >= MAX_META_TAGS:
+            meta_tags_truncated = True
             break
 
         name = (tag.get("name") or "").strip()
         content = tag.get("content")
         if content is None:
             content = ""
+        original_content = content
         content = _truncate_meta_value(content, MAX_META_TAG_VALUE_BYTES)
+        if content != original_content:
+            meta_tags_truncated = True
 
         record = {
             "ordinal": ordinal,
@@ -164,11 +170,12 @@ async def check_meta_tags(response):
 
         record_bytes = len(json.dumps(record, ensure_ascii=False).encode("utf-8"))
         if retained_bytes + record_bytes > MAX_META_TOTAL_BYTES:
+            meta_tags_truncated = True
             break
         meta_tags.append(record)
         retained_bytes += record_bytes
 
-    return meta_tags
+    return meta_tags, index_truncated, meta_tags_truncated
 
 #connect to domain for robots.txt with error handling
 async def fetch_robot(session, domain, on_robot_chunk=None):
@@ -176,10 +183,12 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
     last_exception = None
     index_content_type = None
     meta_tags = None
-    meta_tags_response_status = None
-    meta_tags_last_exception = None
-    meta_tags_error = None
-    meta_tags_exception = None
+    index_truncated = None
+    meta_tags_truncated = None
+    index_response_status = None
+    index_last_exception = None
+    index_error = None
+    index_exception = None
 
     #check index first, if html grab the meta tags
     #check https and http connections
@@ -191,13 +200,20 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                 allow_redirects=True
             ) as response:
                 #Server answered
-                meta_tags_response_status = response.status
+                index_response_status = response.status
                 index_content_type = get_content_type(response)
                 if response.status == 200:
                     #Has index
                     #if html, check for meta tags
                     if "text/html" in index_content_type:
-                        meta_tags = await check_meta_tags(response)
+                        (
+                            meta_tags,
+                            index_truncated,
+                            meta_tags_truncated,
+                        ) = await check_meta_tags(response)
+                    else:
+                        index_truncated = False
+                        meta_tags_truncated = False
                     break
 
         # HTTPS failed, try HTTP
@@ -207,11 +223,11 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
             aiohttp.ClientConnectorError,
             asyncio.TimeoutError,
         ) as e:
-            meta_tags_error = str(e)
+            index_error = str(e)
             continue
 
         except Exception as e:
-            meta_tags_exception = str(e)
+            index_exception = str(e)
             break
 
     #check for robots.txt subdomain
@@ -246,8 +262,10 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                     return {
                         "status_code": 200,
                         "result": "ROBOTS_TOO_LARGE" if truncated else "SUCCESS",
+                        "has_robots": 1,
                         "protocol": protocol,
-                        "content_type": index_content_type,
+                        "index_content_type": index_content_type,
+                        "index_truncated": index_truncated,
                         "content": None,
                         "time": elapsed,
                         "exception": (
@@ -257,25 +275,29 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                         "robot_bytes": received_bytes,
                         "robot_truncated": truncated,
                         "meta_tags": meta_tags,
-                        "meta_tags_response_status": meta_tags_response_status,
-                        "meta_tags_last_exception": meta_tags_last_exception,
-                        "meta_tags_error": meta_tags_error,
-                        "meta_tags_exception": meta_tags_exception
+                        "meta_tags_truncated": meta_tags_truncated,
+                        "index_response_status": index_response_status,
+                        "index_last_exception": index_last_exception,
+                        "index_error": index_error,
+                        "index_exception": index_exception
                     }
 
                 last_result = {
                     "status_code": response.status,
                     "result": f"HTTP_{response.status}",
+                    "has_robots": 0,
                     "protocol": protocol,
-                    "content_type": index_content_type,
+                    "index_content_type": index_content_type,
+                    "index_truncated": index_truncated,
                     "content": None,
                     "time": elapsed,
                     "exception": None,
                     "meta_tags": meta_tags,
-                    "meta_tags_response_status": meta_tags_response_status,
-                    "meta_tags_last_exception": meta_tags_last_exception,
-                    "meta_tags_error": meta_tags_error,
-                    "meta_tags_exception": meta_tags_exception
+                    "meta_tags_truncated": meta_tags_truncated,
+                    "index_response_status": index_response_status,
+                    "index_last_exception": index_last_exception,
+                    "index_error": index_error,
+                    "index_exception": index_exception
                 }
                 continue
 
@@ -294,16 +316,19 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
             return {
                 "status_code": None,
                 "result": type(e).__name__,
+                "has_robots": None,
                 "protocol": protocol,
-                "content_type": index_content_type,
+                "index_content_type": index_content_type,
+                "index_truncated": index_truncated,
                 "content": None,
                 "time": None,
                 "exception": str(e),
                 "meta_tags": meta_tags,
-                "meta_tags_response_status": meta_tags_response_status,
-                "meta_tags_last_exception": meta_tags_last_exception,
-                "meta_tags_error": meta_tags_error,
-                "meta_tags_exception": meta_tags_exception
+                "meta_tags_truncated": meta_tags_truncated,
+                "index_response_status": index_response_status,
+                "index_last_exception": index_last_exception,
+                "index_error": index_error,
+                "index_exception": index_exception
             }
 
     if "last_result" in locals():
@@ -313,18 +338,21 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
     return {
         "status_code": None,
         "result": "CONNECTION_FAILED",
+        "has_robots": None,
         "protocol": None,
-        "content_type": index_content_type,
+        "index_content_type": index_content_type,
+        "index_truncated": index_truncated,
         "content": None,
         "time": None,
         "exception": str(last_exception) if last_exception else None,
         "robot_bytes": 0,
         "robot_truncated": False,
         "meta_tags": meta_tags,
-        "meta_tags_response_status": meta_tags_response_status,
-        "meta_tags_last_exception": meta_tags_last_exception,
-        "meta_tags_error": meta_tags_error,
-        "meta_tags_exception": meta_tags_exception
+        "meta_tags_truncated": meta_tags_truncated,
+        "index_response_status": index_response_status,
+        "index_last_exception": index_last_exception,
+        "index_error": index_error,
+        "index_exception": index_exception
     }
 
 #function for storing data for individual domains during crawl
@@ -346,7 +374,7 @@ async def process_domain(
 
     robot_parser = None
 
-    #function to consume robot chunks
+    #function to stream the robots.txt content to the parse
     async def consume_robot_chunk(chunk):
         nonlocal robot_parser
         async with db_lock:
@@ -362,35 +390,44 @@ async def process_domain(
             UPDATE fetches SET
                 status_code = ?,
                 result = ?,
+                has_robots = ?,
                 protocol = ?,
-                content_type = ?,
+                index_content_type = ?,
+                index_truncated = ?,
                 response_time_ms = ?,
                 exception = ?,
-                meta_tags_response_status = ?,
-                meta_tags_last_exception = ?,
-                meta_tags_error = ?,
-                meta_tags_exception = ?,
-                meta_tags = ?
+                index_response_status = ?,
+                index_last_exception = ?,
+                index_error = ?,
+                index_exception = ?,
+                meta_tags = ?,
+                meta_tags_truncated = ?
             WHERE fetch_id = ?
         """, (
             result.get("status_code"),
             result.get("result"),
+            result.get("has_robots"),
             result.get("protocol"),
-            result.get("content_type"),
+            result.get("index_content_type"),
+            result.get("index_truncated"),
             result.get("time"),
             result.get("exception"),
-            result.get("meta_tags_response_status"),
-            result.get("meta_tags_last_exception"),
-            result.get("meta_tags_error"),
-            result.get("meta_tags_exception"),
+            result.get("index_response_status"),
+            result.get("index_last_exception"),
+            result.get("index_error"),
+            result.get("index_exception"),
             json.dumps(result.get("meta_tags")) if result.get("meta_tags") else None,
+            result.get("meta_tags_truncated"),
             fetch_id
         ))
 
         if robot_parser is not None:
-            raw_hash, policy_hash, byte_count, _ = robot_parser.finish(
+            robot_truncated = (
                 result.get("robot_truncated", False)
                 or result.get("result") != "SUCCESS"
+            )
+            raw_hash, policy_hash, byte_count, _ = robot_parser.finish(
+                robot_truncated
             )
             cur.execute("""
                 UPDATE fetches
@@ -405,7 +442,7 @@ async def process_domain(
                 raw_hash,
                 byte_count,
                 policy_hash,
-                int(result.get("robot_truncated", False)),
+                int(robot_truncated),
                 fetch_id
             ))
         else:
@@ -445,7 +482,7 @@ async def run_crawl(
     ) as session:
         db_lock = asyncio.Lock()
         batch = []
-        batch_size = max(CONCURRENCY * 2, 1)
+        batch_size = max(CONCURRENCY * 20, 1)
         for row in df:
             batch.append(process_domain(
                 session, row, conn, master_conn, parsed_conn,
