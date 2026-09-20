@@ -18,9 +18,6 @@ if load_dotenv:
 
 #grab cloudflare credentials
 def grab_cloudflare_r2_access():
-    cloudflare_account_id = os.environ.get(
-        "CLOUDFLARE_R2_ACCOUNT_ID"
-    )
     cloudflare_r2_access_key = os.environ.get(
         "CLOUDFLARE_R2_ACCESS_KEY_ID"
     )
@@ -35,7 +32,6 @@ def grab_cloudflare_r2_access():
     )
 
     variables = {
-        "CLOUDFLARE_R2_ACCOUNT_ID": cloudflare_account_id,
         "CLOUDFLARE_R2_ACCESS_KEY_ID": cloudflare_r2_access_key,
         "CLOUDFLARE_R2_SECRET_ACCESS_KEY": cloudflare_r2_secret_key,
         "CLOUDFLARE_R2_BUCKET": cloudflare_r2_bucket,
@@ -49,7 +45,6 @@ def grab_cloudflare_r2_access():
         )
 
     return (
-        cloudflare_account_id,
         cloudflare_r2_access_key,
         cloudflare_r2_secret_key,
         cloudflare_r2_bucket,
@@ -59,7 +54,6 @@ def grab_cloudflare_r2_access():
 #get connection to r2 server
 def get_r2_client():
     (
-        account_id,
         access_key,
         secret_key,
         bucket,
