@@ -19,15 +19,11 @@ Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify 
   
 All data from the web crawls is stored in `/data`. Robots.txt responses are parsed while they are being downloaded.The crawler retains parsed results and metadata instead of saving a separate file for every response. After output generation, `main.py` compresses the databases and CSV files and uploads them to the connected Cloudflare R2 bucket.
 
-Robots directive records retain the normalized directive, value, source line, and raw line. `Allow` and `Disallow` are classified as `RFC9309`, `User-agent` as `USRAGT`, known non-RFC records such as `Sitemap` and `Crawl-delay` as `EXTENSION`, and other records as `UNKNOWN`. Diagnostics retain invalid UTF-8, control characters, invalid agent tokens, invalid path patterns, missing separators, and other parse conditions without discarding the original directive line.
-
-Meta tags are collected only from the domain index HTML. Their raw content and parsed tokens are retained. 
-
 A robots.txt response is limited to 8 MiB by default so an unbounded response cannot exhaust memory. To change the limit, set `REP_MAX_ROBOTS_BYTES`. The HTML response is limited to 2 MiB by default; `REP_MAX_HTML_BYTES`, `REP_MAX_META_TAGS`, `REP_MAX_META_TAG_VALUE_BYTES`, and `REP_MAX_META_TOTAL_BYTES` can be used to adjust the meta-tag limits. Responses over the robots limit are marked `ROBOTS_TOO_LARGE`.
 
 `index_truncated` indicates that the homepage exceeded the HTML read limit; `meta_tags_truncated` indicates that individual tags exceeded the limit. `truncated` in crawl data refers to the robots.txt response.
 
-Errors in contacting either the index page of a domain or the robots.txt extentiosn are recorded. the HTTP codes and any specifiic error messages obatined are included in the outout dataset.
+Errors in contacting either the index page of a domain or the robots.txt extentiosn are recorded. the HTTP codes and any specifiic error messages obatined are included in the outout dataset. Additionally, some domains offer redirects upon a request for a `*/robot.txt`, these are recorded as `NOT_ROBOTS_FILE`.
 
 ## Data layout
 
