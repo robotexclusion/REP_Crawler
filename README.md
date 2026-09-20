@@ -88,7 +88,7 @@ Note: *This project was created to run on a Linux system, the commands listed fo
 
 Sign up for an API key to pull the TRANCO list from their [website](https://tranco-list.eu/). Add the email and API token to your environment variables as `TRANCO_EMAIL` and `TRANCO_API_TOKEN`.
 
-For R2 uploads, also set `CLOUDFLARE_R2_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET`, and `CLOUDFLARE_R2_S3_API`. Use `--noupload` when working locally without R2 credentials.
+For R2 uploads, also set `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, `CLOUDFLARE_R2_BUCKET`, and `CLOUDFLARE_R2_S3_API`. Use `--noupload` when working locally without R2 credentials.
 
 This project includes a `uv.lock` file. Install `uv` on your system, then use it to create the virtual environment and install the locked dependencies if desired.
 
