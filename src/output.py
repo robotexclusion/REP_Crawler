@@ -164,6 +164,7 @@ def generate_crawl_dataframes(
             "domain_id",
             "master_domain_id",
             "domain_name",
+            "meta_tag_name",
             "robots_rule",
             "rule_occurrences",
             "robots_tag_count",
@@ -206,13 +207,15 @@ def generate_crawl_dataframes(
             for tag in robots_tags:
                 rules = tag.get("robots_rules") or ["(none)"]
                 for rule in rules:
-                    rule_counts[rule] = rule_counts.get(rule, 0) + 1
-            for rule, occurrences in sorted(rule_counts.items()):
+                    key = (tag.get("name", ""), rule)
+                    rule_counts[key] = rule_counts.get(key, 0) + 1
+            for (meta_tag_name, rule), occurrences in sorted(rule_counts.items()):
                 writer.writerow([
                     fetch_id,
                     domain_id,
                     master_domain_id,
                     domain_name,
+                    meta_tag_name,
                     rule,
                     occurrences,
                     len(robots_tags),

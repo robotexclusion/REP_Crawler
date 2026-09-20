@@ -33,7 +33,7 @@ Errors in contacting either the index page of a domain or the robots.txt extenti
 
 - `/data/domains.sqlite` stores the master list of domains and their IDs.
 - `/data/master_domains.csv` is the CSV dump of the master domain database created during output/upload.
-- `/data/[crawl_id]/tranco_list_*.csv` is the saved Tranco snapshot used for that crawl.
+- `/data/[crawl_id]/tranco_list_[timestamp].csv` is the saved Tranco snapshot used for that crawl.
 - `/data/[crawl_id]/metadata.sqlite` stores crawl state, domain IDs, fetch results, response metadata, hashes, and checkpoints.
 - `/data/[crawl_id]/parsed.sqlite` stores robots groups, user agents, directives, and diagnostics.
 - `/data/[crawl_id]/output/` stores the generated CSV files:
