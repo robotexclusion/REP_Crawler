@@ -1,0 +1,268 @@
+#Holds functions for setting up the crawler
+
+#imports
+import os
+import argparse
+import requests
+import sqlite3
+import csv
+
+#grab the dotenv if there is one
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+if load_dotenv:
+    load_dotenv()
+
+#function for setting up parsing arguments
+def setup_arg_parser():
+    parser = argparse.ArgumentParser(
+        prog = "REP_Crawler", 
+        description = "Crawls domains on the TRANCO list for Robots Exclusion Protocol indicators.",
+        usage = "python main.py [options]"
+        )
+
+    #arg list and options
+    parser.add_argument("-a", "--autorun",
+                        action = "store_true",
+                        help = "Run the full main script without input."
+                        )
+    parser.add_argument("-o", "--output",
+                        action = "store_true",
+                        help = "Skip crawling and generate output for a given crawl ID.")
+    parser.add_argument("-c", "--crawlid",
+                        type = str,
+                        help = "crawl_id to use when skipping crawl step")
+    parser.add_argument("-u", "--noupload",
+                        action="store_true",
+                        help = "Don't upload the crawl data to the connected R2 bucket")
+    parser.add_argument("-r", "--resume",
+                        action="store_true",
+                        help="Resume an interrupted crawl using its saved Tranco snapshot.")
+    parser.add_argument("--max-domains",
+                        type=int,
+                        default=100,
+                        help="Maximum domains to process; use 0 for the full list.")
+
+    #parse cli args
+    args = parser.parse_args()
+
+    #make sure we got valid combos of args
+    if (args.output or args.resume) and not args.crawlid:
+        raise ValueError(
+            "A crawl ID is required when using --output or --resume."
+        )
+
+    if args.resume and args.output:
+        raise ValueError("--resume cannot be combined with --output.")
+
+    return args
+
+#function for getting the latest Tranco list
+def get_latest_tranco_list():
+
+    tranco_email = os.environ.get("TRANCO_EMAIL")
+    tranco_api_token = os.environ.get("TRANCO_API_TOKEN")
+    tranco_api_base = "https://tranco-list.eu/api"
+
+    response = requests.get(
+        f"{tranco_api_base}/lists/date/latest",
+        auth=(tranco_email, tranco_api_token),
+        timeout=30
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    #throw an error if not available
+    if not data.get("available"):
+        raise RuntimeError(
+            f"Tranco list {data.get('list_id')} "
+            "is not currently available."
+        )
+    return data
+
+#grab the latest Tranco list, download and save in the crawl dir
+def download_latest_tranco_list(crawl_dir):
+    tranco_info = get_latest_tranco_list()
+    tranco_download_url = tranco_info["download"]
+    tranco_file_name = "tranco_list_" + tranco_info["created_on"] + ".csv"
+    tranco_file = crawl_dir / tranco_file_name
+
+    with requests.get(
+        tranco_download_url,
+        stream=True,
+        timeout=120
+    ) as response:
+        response.raise_for_status()
+        with open(tranco_file, "wb") as f:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    f.write(chunk)
+
+
+    print(f"Saved Tranco list to: {tranco_file}")
+    return tranco_file
+
+#stream the Tranco list instead of loading the full into meemory
+def iter_tranco_domains(tranco_file, max_domains=None):
+    with open(tranco_file, "r", encoding="utf-8", newline="") as source:
+        reader = csv.reader(source)
+        for row_number, row in enumerate(reader, start=1):
+            if len(row) < 2:
+                continue
+            if max_domains is not None and row_number > max_domains:
+                break
+            yield row_number, row[1].strip()
+
+def iter_pending_tranco_domains(tranco_file, completed, max_domains=None):
+    for rank, domain in iter_tranco_domains(tranco_file, max_domains):
+        if rank not in completed:
+            yield rank, domain
+
+#Create db file for domains if it doesnt exist already
+def create_domain_database(master_domain_db_path):
+    conn = sqlite3.connect(master_domain_db_path)
+    cur = conn.cursor()
+
+    #Table to store domain name info
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS master_domain_names (
+        master_domain_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        domain_name TEXT NOT NULL UNIQUE
+        )
+        """)
+
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_master_domain_names_domain
+    ON master_domain_names(domain_name)
+    """)
+
+    #commit and return
+    conn.commit()
+    cur.close()
+    print(f"Created master domain database at: {master_domain_db_path}")
+    return conn
+
+#Create the db file for the crawl
+def create_crawl_database(crawl_db_path):
+    conn = sqlite3.connect(crawl_db_path)
+    cur = conn.cursor()
+
+    #Table to store metadata for the crawl
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS crawl (
+        crawl_id TEXT PRIMARY KEY,
+        started TEXT,
+        finished TEXT,
+        status TEXT DEFAULT 'created',
+        last_rank INTEGER,
+        completed_domains INTEGER DEFAULT 0,
+        checkpointed_at TEXT
+    )
+    """)
+
+    #table to create keys and store domain names
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS domains (
+        domain_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        master_domain_id INTEGER,
+        FOREIGN KEY (master_domain_id) REFERENCES master_domain_names(master_domain_id)
+    )
+    """)
+
+    #table to store information related to each information fetch
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS fetches (
+        fetch_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        crawl_id TEXT,
+        domain_id INTEGER,
+        tranco_rank INTEGER,
+        timestamp TEXT,
+        status_code INTEGER,
+        result TEXT,
+        protocol TEXT,
+        response_time_ms REAL,
+        filename TEXT,
+        bytes INTEGER,
+        sha256 TEXT,
+        exception TEXT,
+        index_content_type TEXT,
+        index_truncated INTEGER,
+        has_robots INTEGER,
+        meta_tags TEXT,
+        meta_tags_truncated INTEGER,
+        index_response_status TEXT,
+        index_last_exception TEXT,
+        index_error TEXT,
+        index_exception TEXT,
+        policy_hash TEXT,
+        truncated INTEGER NOT NULL DEFAULT 0,
+        completed INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (crawl_id) REFERENCES crawl(crawl_id),
+        FOREIGN KEY (domain_id) REFERENCES domains(domain_id)
+    )
+    """)
+
+    #commit and return
+    conn.commit()
+    cur.close()
+    print(f"Created crawl database at: {crawl_db_path}")
+    return conn
+
+#update the crawl db with start and finish times
+def start_crawl(conn, crawl_id):
+    conn.execute(
+        "INSERT OR IGNORE INTO crawl(crawl_id, started, status) VALUES (?, datetime('now'), 'created')",
+        (crawl_id,)
+    )
+    conn.execute(
+        "UPDATE crawl SET status='running', finished=NULL WHERE crawl_id=?",
+        (crawl_id,)
+    )
+    conn.commit()
+
+def finish_crawl(conn, crawl_id):
+    conn.execute(
+        "UPDATE crawl SET finished=datetime('now'), status='complete' WHERE crawl_id=?",
+        (crawl_id,)
+    )
+    conn.commit()
+
+#checkpoint caching
+def checkpoint_crawl(conn, crawl_id, rank):
+    conn.execute(
+        """UPDATE crawl SET last_rank=MAX(COALESCE(last_rank, 0), ?),
+        completed_domains=completed_domains + 1,
+        checkpointed_at=datetime('now') WHERE crawl_id=?""",
+        (rank, crawl_id)
+    )
+    conn.commit()
+
+#check completed
+def completed_ranks(conn, crawl_id):
+    return {
+        rank for (rank,) in conn.execute(
+            "SELECT tranco_rank FROM fetches WHERE crawl_id=? AND completed=1",
+            (crawl_id,)
+        )
+    }
+
+#check how many were not completed
+def count_incomplete_fetches(conn, crawl_id):
+    return conn.execute(
+        "SELECT COUNT(*) FROM fetches WHERE crawl_id=? AND completed=0",
+        (crawl_id,)
+    ).fetchone()[0]
+
+#Function to update the main domain name db file before running
+def prime_main_domain_db(master_conn, df):
+    rows = ((domain_rank, domain) for domain_rank, domain in df)
+    cur = master_conn.cursor()
+    cur.executemany(
+        "INSERT OR IGNORE INTO master_domain_names(domain_name) VALUES (?)",
+        ((domain,) for _, domain in rows)
+    )
+    master_conn.commit()
+    cur.close()
