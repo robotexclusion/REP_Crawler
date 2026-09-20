@@ -19,9 +19,24 @@ MAX_HTML_BYTES = int(os.environ.get("REP_MAX_HTML_BYTES", 2 * 1024 * 1024))
 MAX_META_TAGS = int(os.environ.get("REP_MAX_META_TAGS", 200))
 MAX_META_TAG_VALUE_BYTES = int(os.environ.get("REP_MAX_META_TAG_VALUE_BYTES", 8192))
 MAX_META_TOTAL_BYTES = int(os.environ.get("REP_MAX_META_TOTAL_BYTES", 8192))
+ROBOTS_DIRECTIVE_PATTERN = re.compile(
+    rb"(?im)^[ \t]*(?:user-agent|allow|disallow|sitemap|crawl-delay|host|clean-param)[ \t]*:"
+)
+
+#sometimes the website responds to a robots.txt query, but redierects to an unrelated page
+def redirect_check(response_url, chunk):
+    if ROBOTS_DIRECTIVE_PATTERN.search(chunk):
+        return True
+    if response_url.path.lower().endswith("/robots.txt"):
+        return all(
+            not line.strip() or line.lstrip().startswith(b"#")
+            for line in chunk.splitlines()
+        )
+    return False
+
 
 #function to truncate meta values
-def _truncate_meta_value(value, limit):
+def truncate_meta_values(value, limit):
     if value is None:
         return None
     text = str(value)
@@ -31,8 +46,8 @@ def _truncate_meta_value(value, limit):
     return trimmed + "..."
 
 
-#function to parse meta rules
-def _parse_meta_robots_value(value):
+#function to parse meta tag rules
+def parse_meta_value(value):
     raw = (value or "").strip()
     if not raw:
         return {
@@ -148,7 +163,7 @@ async def check_meta_tags(response):
         if content is None:
             content = ""
         original_content = content
-        content = _truncate_meta_value(content, MAX_META_TAG_VALUE_BYTES)
+        content = truncate_meta_values(content, MAX_META_TAG_VALUE_BYTES)
         if content != original_content:
             meta_tags_truncated = True
 
@@ -160,7 +175,7 @@ async def check_meta_tags(response):
         }
 
         if name.lower() == "robots":
-            parsed = _parse_meta_robots_value(content)
+            parsed = parse_meta_value(content)
             record["robots_rules"] = parsed["rules"]
             record["robots_malformed"] = parsed["malformed"]
             record["robots_warning"] = parsed["warning"]
@@ -247,7 +262,37 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                     #Has robots.txt
                     received_bytes = 0
                     truncated = False
+                    robots_probe = bytearray()
+                    robots_validated = False
                     async for chunk in response.content.iter_chunked(64 * 1024):
+                        if not robots_validated:
+                            robots_probe.extend(chunk)
+                            if redirect_check(response.url, robots_probe):
+                                robots_validated = True
+                                chunk = bytes(robots_probe)
+                            elif len(robots_probe) < 64 * 1024:
+                                continue
+                            else:
+                                return {
+                                    "status_code": response.status,
+                                    "result": "NOT_ROBOTS",
+                                    "has_robots": 0,
+                                    "protocol": protocol,
+                                    "index_content_type": index_content_type,
+                                    "index_truncated": index_truncated,
+                                    "content": None,
+                                    "time": elapsed,
+                                    "exception": (
+                                        "robots.txt response did not contain "
+                                        "a recognized robots directive"
+                                    ),
+                                    "meta_tags": meta_tags,
+                                    "meta_tags_truncated": meta_tags_truncated,
+                                    "index_response_status": index_response_status,
+                                    "index_last_exception": index_last_exception,
+                                    "index_error": index_error,
+                                    "index_exception": index_exception
+                                }
                         remaining = MAX_ROBOTS_BYTES - received_bytes
                         if remaining <= 0:
                             truncated = True
@@ -259,6 +304,28 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                         if len(accepted) < len(chunk):
                             truncated = True
                             break
+                    if not robots_validated:
+                        if not redirect_check(response.url, robots_probe):
+                            return {
+                                "status_code": response.status,
+                                "result": "NOT_ROBOTS",
+                                "has_robots": 0,
+                                "protocol": protocol,
+                                "index_content_type": index_content_type,
+                                "index_truncated": index_truncated,
+                                "content": None,
+                                "time": elapsed,
+                                "exception": (
+                                    "robots.txt response did not contain "
+                                    "a recognized robots directive"
+                                ),
+                                "meta_tags": meta_tags,
+                                "meta_tags_truncated": meta_tags_truncated,
+                                "index_response_status": index_response_status,
+                                "index_last_exception": index_last_exception,
+                                "index_error": index_error,
+                                "index_exception": index_exception
+                            }
                     return {
                         "status_code": 200,
                         "result": "ROBOTS_TOO_LARGE" if truncated else "SUCCESS",
