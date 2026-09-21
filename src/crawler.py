@@ -404,10 +404,13 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
     # HTTPS and HTTP both failed
     failure_exception = None
     if last_exception is not None:
-        failure_exception = str(last_exception) or type(last_exception).__name__
+        failure_exception = str(last_exception).strip() or None
     return {
         "status_code": None,
-        "result": "CONNECTION_FAILED",
+        "result": (
+            "CONNECTION_TIMEOUT"
+            if not failure_exception else "CONNECTION_FAILED"
+        ),
         "has_robots": None,
         "protocol": None,
         "index_content_type": index_content_type,

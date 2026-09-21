@@ -15,6 +15,7 @@ def write_query_csv(connection, query, output_path):
         while rows := cursor.fetchmany(10000):
             writer.writerows(rows)
 
+
 #grab the master domain names
 def dump_master_domains_csv(master_domain_db_path, output_path):
     conn = sqlite3.connect(master_domain_db_path)
@@ -116,29 +117,77 @@ def generate_crawl_dataframes(
 
     #robots issues/diagnostic data
     print("Generating robots.txt diagnostics data")
+    codes = [
+        row[0] for row in conn.execute(
+            """
+            SELECT DISTINCT diagnostic_code
+            FROM parsed_data.diagnostics
+            ORDER BY diagnostic_code
+            """
+        )
+    ]
+    diagnostics_header = [
+        "fetch_id", "domain_id", "master_domain_id", "domain_name"
+    ]
+    for code in codes:
+        diagnostics_header.extend([f"{code}_count", f"{code}_details"])
+
     diagnostics_query = """
         SELECT
         diagnostics.fetch_id,
         fetches.domain_id,
         domains.master_domain_id,
         master_domains.master_domain_names.domain_name,
-        diagnostics.diagnostic_id,
-        diagnostics.line_number,
         diagnostics.diagnostic_code,
-        diagnostics.severity,
-        diagnostics.raw,
-        diagnostics.directive,
-        diagnostics.value,
-        diagnostics.message
+        diagnostics.line_number,
+        diagnostics.raw
         FROM parsed_data.diagnostics AS diagnostics
         JOIN fetches ON fetches.fetch_id = diagnostics.fetch_id
         LEFT JOIN domains ON fetches.domain_id = domains.domain_id
         LEFT JOIN master_domains.master_domain_names ON
             domains.master_domain_id = master_domains.master_domain_names.master_domain_id
-        ORDER BY diagnostics.fetch_id, diagnostics.line_number,
-            diagnostics.diagnostic_id
+        ORDER BY diagnostics.fetch_id, diagnostics.diagnostic_id
     """
-    write_query_csv(conn, diagnostics_query, output_dir / diagnostics_df_filename)
+    diagnostics_cursor = conn.execute(diagnostics_query)
+    with open(output_dir / diagnostics_df_filename, "w", encoding="utf-8", newline="") as output:
+        writer = csv.writer(output)
+        writer.writerow(diagnostics_header)
+        current_key = None
+        current_row = None
+        issue_data = {}
+
+        def write_diagnostics_row():
+            if current_row is None:
+                return
+            values = list(current_row)
+            for code in codes:
+                details = issue_data.get(code, [])
+                values.extend([len(details), " | ".join(details)])
+            writer.writerow(values)
+
+        for (
+            fetch_id,
+            domain_id,
+            master_domain_id,
+            domain_name,
+            diagnostic_code,
+            line_number,
+            raw,
+        ) in diagnostics_cursor:
+            row_key = (fetch_id, domain_id)
+            if row_key != current_key:
+                write_diagnostics_row()
+                current_key = row_key
+                current_row = [
+                    fetch_id, domain_id, master_domain_id, domain_name
+                ]
+                issue_data = {}
+            line_text = "" if line_number is None else str(line_number)
+            raw_text = "" if raw is None else str(raw)
+            issue_data.setdefault(diagnostic_code, []).append(
+                f"{line_text}: {raw_text}"
+            )
+        write_diagnostics_row()
 
     #meta tag summary data
     print("Generating meta tag summary data")
