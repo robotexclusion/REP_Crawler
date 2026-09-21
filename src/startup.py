@@ -172,6 +172,11 @@ def create_crawl_database(crawl_db_path):
     )
     """)
 
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_domains_master_domain_id
+    ON domains(master_domain_id)
+    """)
+
     #table to store information related to each information fetch
     cur.execute("""
     CREATE TABLE IF NOT EXISTS fetches (

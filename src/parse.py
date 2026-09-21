@@ -166,7 +166,6 @@ class StreamingRobotParser:
         self.buffer = lines.pop()
         for line in lines:
             self.parse_line(line.rstrip("\r"))
-        self.connection.commit()
 
     #function to parse lines, check for issues and do they meet RFC 9309 code
     def parse_line(self, raw):
