@@ -6,6 +6,8 @@ import random
 import sqlite3
 from pathlib import Path
 
+from src.r2 import upload_data
+
 #define the columns for the output sample
 SAMPLE_COLUMNS = [
     "domain_name", "https_homepage_url",
@@ -265,6 +267,11 @@ def write_sample(rows, output_path):
         writer.writerows(rows)
 
 
+def upload_validation_file(output_path):
+    output_path = Path(output_path)
+    upload_data(output_path, f"validation/{output_path.name}")
+
+
 def sample_crawl(base_dir, crawl_id, domains, output_name):
     connection, crawl_dir = connect_crawl(base_dir, crawl_id)
     try:
@@ -287,9 +294,11 @@ def single_crawl_validation(seed_value, num_samples, base_dir, crawl_id):
     indices = sample_indices(len(available), num_samples, seed_value)
     domains = [available[index] for index in indices]
     rows, output_path = sample_crawl(
-        base_dir, crawl_id, domains, f"validation_sample_{crawl_id}.csv"
+        base_dir, crawl_id, domains,
+        f"validation_sample_{crawl_id}_seed_{seed_value}.csv"
     )
     print(f"Saved {len(rows)} domains to {output_path}")
+    upload_validation_file(output_path)
     return output_path
 
 #check if the results from the first crawl match the second one
@@ -346,16 +355,20 @@ def multiple_crawl_validation(seed_value, num_samples, base_dir, crawl_ids):
             base_dir,
             crawl_id,
             selected_domains,
-            f"validation_sample_{crawl_id}.csv",
+            f"validation_sample_{crawl_id}_seed_{seed_value}.csv",
         )
         rows_by_crawl[crawl_id] = rows
         print(f"Saved {len(rows)} domains to {output_path}")
+        upload_validation_file(output_path)
 
     comparison_path = Path(base_dir) / (
-        "validation_comparison_" + "_".join(crawl_ids) + ".csv"
+        "validation_comparison_"
+        + "_".join(crawl_ids)
+        + f"_seed_{seed_value}.csv"
     )
     write_comparison(rows_by_crawl, selected_domains, comparison_path)
     print(f"Saved crawl comparison to {comparison_path}")
+    upload_validation_file(comparison_path)
     return comparison_path
 
 #main func

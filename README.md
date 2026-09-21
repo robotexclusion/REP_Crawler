@@ -26,6 +26,8 @@ A robots.txt response is limited to 8 MiB by default so an unbounded response ca
 
 Errors in contacting either the index page of a domain or the robots.txt extentiosn are recorded. the HTTP codes and any specifiic error messages obatined are included in the outout dataset. Additionally, some domains offer redirects upon a request for a `*/robot.txt`, these are recorded as `NOT_ROBOTS_FILE`.
 
+Validation samples include URLs, recorded response metadata, parsed robots directives, diagnostic determination of rules, and the captured meta tags. Multiple-crawl validation samples the same completed domain set in every requested crawl and also outputs a comparison CSV. Validation CSVs include the sampling seed in their filenames and are uploaded automatically to the `validation/` prefix in the configured R2 bucket.
+
 ## Data layout
 
 - `/data/domains.sqlite` stores the master list of domains and their IDs.
@@ -73,8 +75,6 @@ For `validation.py`:
 - `-v [random seed], --seedvalue [random seed]` uses a specific seed for reproducible sampling. A random seed is used by default.
 - `-n [value], --numsamples [value]` sets the number of domains to sample. The default is 100.
 - `--data-dir [path]` sets the root data directory. The default is `./data`.
-
-Validation samples include URLs, recorded response metadata, parsed robots directives,  diagnostic determination of rules, and the captured meta tags. Multiple-crawl validation samples the same completed domain set in every requested crawl and also outputs a comparison CSV.
 
 Example:
 

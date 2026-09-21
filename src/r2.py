@@ -204,6 +204,7 @@ def upload_crawl(crawl_id, base_dir):
 
 
 #download a specified crawl
+#currently not used
 def download_crawl(crawl_id, output_dir):
 
     output_dir = Path(output_dir)
