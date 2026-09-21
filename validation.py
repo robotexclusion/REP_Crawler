@@ -10,8 +10,9 @@ from pathlib import Path
 SAMPLE_COLUMNS = [
     "domain_name", "https_homepage_url",
     "crawl_id", "tranco_rank",
-    "timestamp", "protocol", "status_code", "result", "index_content_type",
-    "index_response_status", "index_truncated", "has_robots",
+    "timestamp", "protocol", "status_code", "result", "exception",
+    "index_content_type", "index_response_status", "index_last_exception",
+    "index_error", "index_exception", "index_truncated", "has_robots",
     "meta_tags_truncated", "robots_truncated",
     "response_time_ms", "bytes", "sha256", "policy_hash",
     "completed", "parse_errors", "lines", "comments", "blank_lines",
@@ -190,8 +191,12 @@ def fetch_sample_rows(connection):
             fetches.protocol,
             fetches.status_code,
             fetches.result,
+            fetches.exception,
             fetches.index_content_type,
             fetches.index_response_status,
+            fetches.index_last_exception,
+            fetches.index_error,
+            fetches.index_exception,
             fetches.index_truncated,
             fetches.has_robots,
             fetches.response_time_ms,
@@ -222,7 +227,10 @@ def fetch_sample_rows(connection):
             ) AS directives,
             (
                 SELECT group_concat(
-                    diagnostics.diagnostic_code || ': ' || diagnostics.message,
+                    diagnostics.diagnostic_code || ' (' || diagnostics.severity
+                    || ', line ' || COALESCE(diagnostics.line_number, '?')
+                    || '): ' || COALESCE(diagnostics.raw, '') || ' - '
+                    || diagnostics.message,
                     ' | '
                 )
                 FROM parsed_data.diagnostics
@@ -290,9 +298,14 @@ def write_comparison(rows_by_crawl, domains, output_path):
     for crawl_id in rows_by_crawl:
         fields.extend([
             f"{crawl_id}_result", f"{crawl_id}_status_code",
+            f"{crawl_id}_exception",
             f"{crawl_id}_protocol", f"{crawl_id}_sha256",
             f"{crawl_id}_policy_hash", f"{crawl_id}_bytes",
             f"{crawl_id}_has_robots", f"{crawl_id}_robots_truncated",
+            f"{crawl_id}_index_content_type",
+            f"{crawl_id}_index_response_status",
+            f"{crawl_id}_index_last_exception",
+            f"{crawl_id}_index_error", f"{crawl_id}_index_exception",
             f"{crawl_id}_index_truncated",
             f"{crawl_id}_meta_tags_truncated",
             f"{crawl_id}_parse_errors", f"{crawl_id}_diagnostics",
