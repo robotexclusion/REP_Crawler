@@ -6,6 +6,7 @@ Web crawler to examine Robots Exclusion Protocol (REP) implementation in the top
 
 Python project utilizing the [TRANCO list](https://tranco-list.eu/) to identify the top web domains, and then queries them for Robots Exclusion Protocol (REP) implementations using the standards in [RFC 9309](https://www.rfc-editor.org/rfc/rfc9309.html), as well as \<meta\> tags in HTML text described by the [Web Robots Pages](https://www.robotstxt.org/). Crawl data is stored in `/data` as SQLite databases and CSV files. The validation script creates small samples for manual browser checks. Crawl result directories are included in `.gitignore` because a full crawl creates a lot of data. At the end of a crawl, the databases and CSV files are compressed and uploaded to a connected Cloudflare R2 bucket.
 
+The main data gathering performed for the study was through a Virtual Machine hosted by Hetzner in Helsinki, Finland. The data gathered through web crawling has been made available at [repcrawler.download](https://repcrawler.download)
 
 ## Functions
 
