@@ -116,6 +116,7 @@ def generate_crawl_dataframes(
     write_query_csv(conn, robots_query, output_dir / robots_df_filename)
 
     #robots issues/diagnostic data
+    #this one is special, had issues with it being too long
     print("Generating robots.txt diagnostics data")
     codes = [
         row[0] for row in conn.execute(
