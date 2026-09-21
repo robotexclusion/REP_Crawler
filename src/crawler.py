@@ -26,7 +26,7 @@ ROBOTS_DIRECTIVE_PATTERN = re.compile(
 
 #sometimes the website responds to a robots.txt query, but redierects to an unrelated page
 def redirect_check(response_url, chunk, requested_host=None):
-    if requested_host and response_url.host != requested_host:
+    if requested_host and not robots_hosts_match(response_url.host, requested_host):
         return False
     if ROBOTS_DIRECTIVE_PATTERN.search(chunk):
         return True
@@ -36,6 +36,11 @@ def redirect_check(response_url, chunk, requested_host=None):
             for line in chunk.splitlines()
         )
     return False
+
+
+def robots_hosts_match(response_host, requested_host):
+    """Treat a canonical www redirect as the same robots host."""
+    return response_host.removeprefix("www.") == requested_host.removeprefix("www.")
 
 
 #function to truncate meta values
@@ -274,7 +279,8 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                             "content": None,
                             "time": elapsed,
                             "exception": (
-                                "robots.txt response redirected to a different host"
+                                "robots.txt response redirected from "
+                                f"{url} to {response.url}"
                             ),
                             "meta_tags": meta_tags,
                             "meta_tags_truncated": meta_tags_truncated,
