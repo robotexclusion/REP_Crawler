@@ -119,7 +119,7 @@ def generate_crawl_dataframes(
     #this one is special, had issues with it being too long
     print("Generating robots.txt diagnostics data")
     codes = [
-        row[0] for row in conn.execute(
+        str(row[0]) for row in conn.execute(
             """
             SELECT DISTINCT diagnostic_code
             FROM parsed_data.diagnostics
@@ -131,7 +131,7 @@ def generate_crawl_dataframes(
         "fetch_id", "domain_id", "master_domain_id", "domain_name"
     ]
     for code in codes:
-        diagnostics_header.extend([f"{code}_count", f"{code}_details"])
+        diagnostics_header.extend([f"{code}_COUNT", f"{code}_DETAILS"])
 
     diagnostics_query = """
         SELECT
@@ -178,7 +178,7 @@ def generate_crawl_dataframes(
             raw,
             _diagnostic_id,
         ) in diagnostics_cursor:
-            row_key = (master_domain_id, domain_id)
+            row_key = (fetch_id, domain_id, master_domain_id, domain_name)
             if row_key != current_key:
                 write_diagnostics_row()
                 current_key = row_key
