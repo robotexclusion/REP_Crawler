@@ -10,7 +10,6 @@ import os
 from datetime import datetime
 from tqdm.asyncio import tqdm_asyncio
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse
 from src.parse import StreamingRobotParser
 from src.startup import checkpoint_crawl
 
@@ -24,10 +23,8 @@ ROBOTS_DIRECTIVE_PATTERN = re.compile(
     rb"(?im)^[ \t]*(?:user-agent|allow|disallow|sitemap|crawl-delay|host|clean-param)[ \t]*:"
 )
 
-#sometimes the website responds to a robots.txt query, but redierects to an unrelated page
-def redirect_check(response_url, chunk, requested_host=None):
-    if requested_host and not robots_hosts_match(response_url.host, requested_host):
-        return False
+#sometimes the website responds to a robots.txt query, but redirects to an unrelated page
+def redirect_check(response_url, chunk):
     if ROBOTS_DIRECTIVE_PATTERN.search(chunk):
         return True
     if response_url.path.lower().endswith("/robots.txt"):
@@ -36,11 +33,6 @@ def redirect_check(response_url, chunk, requested_host=None):
             for line in chunk.splitlines()
         )
     return False
-
-
-def robots_hosts_match(response_host, requested_host):
-    """Treat a canonical www redirect as the same robots host."""
-    return response_host.removeprefix("www.") == requested_host.removeprefix("www.")
 
 
 #function to truncate meta values
@@ -257,7 +249,6 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
     #check https and http connections
     for protocol in protocols:
         url = f"{protocol}://{domain}/robots.txt"
-        requested_host = urlparse(url).hostname
         start = time.time()
         try:
             async with session.get(
@@ -268,27 +259,6 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
 
                 #Server answered
                 if response.status == 200:
-                    if response.url.host != requested_host:
-                        return {
-                            "status_code": response.status,
-                            "result": "NOT_ROBOTS",
-                            "has_robots": 0,
-                            "protocol": protocol,
-                            "index_content_type": index_content_type,
-                            "index_truncated": index_truncated,
-                            "content": None,
-                            "time": elapsed,
-                            "exception": (
-                                "robots.txt response redirected from "
-                                f"{url} to {response.url}"
-                            ),
-                            "meta_tags": meta_tags,
-                            "meta_tags_truncated": meta_tags_truncated,
-                            "index_response_status": index_response_status,
-                            "index_last_exception": index_last_exception,
-                            "index_error": index_error,
-                            "index_exception": index_exception
-                        }
                     #Has robots.txt
                     received_bytes = 0
                     truncated = False
@@ -297,9 +267,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                     async for chunk in response.content.iter_chunked(64 * 1024):
                         if not robots_validated:
                             robots_probe.extend(chunk)
-                            if redirect_check(
-                                response.url, robots_probe, requested_host
-                            ):
+                            if redirect_check(response.url, robots_probe):
                                 robots_validated = True
                                 chunk = bytes(robots_probe)
                             elif len(robots_probe) < 64 * 1024:
@@ -315,8 +283,9 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                                     "content": None,
                                     "time": elapsed,
                                     "exception": (
-                                        "robots.txt response did not contain "
-                                        "a recognized robots directive"
+                                        "robots.txt response at "
+                                        f"{response.url} did not contain a "
+                                        "recognized robots directive"
                                     ),
                                     "meta_tags": meta_tags,
                                     "meta_tags_truncated": meta_tags_truncated,
@@ -338,7 +307,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                             break
                     if not robots_validated:
                         if not redirect_check(
-                            response.url, robots_probe, requested_host
+                            response.url, robots_probe
                         ):
                             return {
                                 "status_code": response.status,
@@ -350,8 +319,9 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                                 "content": None,
                                 "time": elapsed,
                                 "exception": (
-                                    "robots.txt response did not contain "
-                                    "a recognized robots directive"
+                                    "robots.txt response at "
+                                    f"{response.url} did not contain a "
+                                    "recognized robots directive"
                                 ),
                                 "meta_tags": meta_tags,
                                 "meta_tags_truncated": meta_tags_truncated,
