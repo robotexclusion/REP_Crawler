@@ -402,6 +402,9 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
         return last_result
 
     # HTTPS and HTTP both failed
+    failure_exception = None
+    if last_exception is not None:
+        failure_exception = str(last_exception) or type(last_exception).__name__
     return {
         "status_code": None,
         "result": "CONNECTION_FAILED",
@@ -411,7 +414,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
         "index_truncated": index_truncated,
         "content": None,
         "time": None,
-        "exception": str(last_exception) if last_exception else None,
+        "exception": failure_exception,
         "robot_bytes": 0,
         "robot_truncated": False,
         "meta_tags": meta_tags,
