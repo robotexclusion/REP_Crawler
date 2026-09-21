@@ -22,7 +22,7 @@ async def main():
     #set vars
     USER_AGENT = "REP_Research_Crawler"
     #Concurrency and timeout options to not overload ISP
-    CONCURRENCY = 200
+    CONCURRENCY = 100
     LIMIT_PER_HOST = 1
     TIMEOUT = 15
     # optional test size, set to None for unlimited/full list
