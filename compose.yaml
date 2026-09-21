@@ -1,0 +1,21 @@
+services:
+  crawler:
+    build:
+      context: .
+    image: rep-crawler:local
+    init: true
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      REP_MAX_ROBOTS_BYTES: "8388608"
+      REP_MAX_HTML_BYTES: "2097152"
+      REP_MAX_META_TAGS: "200"
+      REP_MAX_META_TAG_VALUE_BYTES: "8192"
+      REP_MAX_META_TOTAL_BYTES: "8192"
+    volumes:
+      - crawler-data:/app/data
+    command: ["--autorun", "--max-domains", "1000"]
+
+volumes:
+  crawler-data:

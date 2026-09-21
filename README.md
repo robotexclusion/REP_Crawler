@@ -138,3 +138,39 @@ it with:
 ```bash
 python main.py - -r -c [crawl_id]
 ```
+
+## Docker deployment
+
+Build the image:
+
+```bash
+docker compose build
+```
+
+Run a crawl:
+
+```bash
+docker compose run --rm crawler -a
+```
+
+Run the full crawl in the background:
+
+```bash
+docker compose up -d crawler
+docker compose logs -f crawler
+```
+
+Crawl databases, snapshots, and generated output are stored in the persistent
+`crawler-data` Docker volume mounted at `/app/data`. The container has no
+memory limit configured and can use host swap if swap is enabled. Heavy
+swapping will make the crawl very slow.
+
+To resume a stopped crawl, use its crawl ID:
+
+```bash
+docker compose run --rm crawler --autorun --resume \
+	--crawlid 202609202147 --max-domains 0
+```
+
+The container is configured with `restart: "no"` so a completed crawl does not
+start again automatically.
