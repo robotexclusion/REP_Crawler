@@ -549,7 +549,7 @@ async def run_crawl(
     ) as session:
         db_lock = asyncio.Lock()
         batch = []
-        batch_size = max(CONCURRENCY * 20, 1)
+        batch_size = max(CONCURRENCY * 5, 1)
         for row in df:
             batch.append(process_domain(
                 session, row, conn, master_conn, parsed_conn,
