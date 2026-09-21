@@ -10,6 +10,7 @@ import os
 from datetime import datetime
 from tqdm.asyncio import tqdm_asyncio
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 from src.parse import StreamingRobotParser
 from src.startup import checkpoint_crawl
 
@@ -24,7 +25,9 @@ ROBOTS_DIRECTIVE_PATTERN = re.compile(
 )
 
 #sometimes the website responds to a robots.txt query, but redierects to an unrelated page
-def redirect_check(response_url, chunk):
+def redirect_check(response_url, chunk, requested_host=None):
+    if requested_host and response_url.host != requested_host:
+        return False
     if ROBOTS_DIRECTIVE_PATTERN.search(chunk):
         return True
     if response_url.path.lower().endswith("/robots.txt"):
@@ -249,6 +252,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
     #check https and http connections
     for protocol in protocols:
         url = f"{protocol}://{domain}/robots.txt"
+        requested_host = urlparse(url).hostname
         start = time.time()
         try:
             async with session.get(
@@ -259,6 +263,26 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
 
                 #Server answered
                 if response.status == 200:
+                    if response.url.host != requested_host:
+                        return {
+                            "status_code": response.status,
+                            "result": "NOT_ROBOTS",
+                            "has_robots": 0,
+                            "protocol": protocol,
+                            "index_content_type": index_content_type,
+                            "index_truncated": index_truncated,
+                            "content": None,
+                            "time": elapsed,
+                            "exception": (
+                                "robots.txt response redirected to a different host"
+                            ),
+                            "meta_tags": meta_tags,
+                            "meta_tags_truncated": meta_tags_truncated,
+                            "index_response_status": index_response_status,
+                            "index_last_exception": index_last_exception,
+                            "index_error": index_error,
+                            "index_exception": index_exception
+                        }
                     #Has robots.txt
                     received_bytes = 0
                     truncated = False
@@ -267,7 +291,9 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                     async for chunk in response.content.iter_chunked(64 * 1024):
                         if not robots_validated:
                             robots_probe.extend(chunk)
-                            if redirect_check(response.url, robots_probe):
+                            if redirect_check(
+                                response.url, robots_probe, requested_host
+                            ):
                                 robots_validated = True
                                 chunk = bytes(robots_probe)
                             elif len(robots_probe) < 64 * 1024:
@@ -305,7 +331,9 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                             truncated = True
                             break
                     if not robots_validated:
-                        if not redirect_check(response.url, robots_probe):
+                        if not redirect_check(
+                            response.url, robots_probe, requested_host
+                        ):
                             return {
                                 "status_code": response.status,
                                 "result": "NOT_ROBOTS",
@@ -340,7 +368,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                             if truncated else None
                         ),
                         "robot_bytes": received_bytes,
-                        "robot_truncated": truncated,
+                        "robots_truncated": truncated,
                         "meta_tags": meta_tags,
                         "meta_tags_truncated": meta_tags_truncated,
                         "index_response_status": index_response_status,
@@ -404,12 +432,13 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
     # HTTPS and HTTP both failed
     failure_exception = None
     if last_exception is not None:
-        failure_exception = str(last_exception).strip() or None
+        failure_exception = str(last_exception).strip() or type(last_exception).__name__
     return {
         "status_code": None,
         "result": (
             "CONNECTION_TIMEOUT"
-            if not failure_exception else "CONNECTION_FAILED"
+            if isinstance(last_exception, asyncio.TimeoutError)
+            else "CONNECTION_FAILED"
         ),
         "has_robots": None,
         "protocol": None,
@@ -419,7 +448,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
         "time": None,
         "exception": failure_exception,
         "robot_bytes": 0,
-        "robot_truncated": False,
+        "robots_truncated": False,
         "meta_tags": meta_tags,
         "meta_tags_truncated": meta_tags_truncated,
         "index_response_status": index_response_status,
@@ -496,7 +525,7 @@ async def process_domain(
 
         if robot_parser is not None:
             robot_truncated = (
-                result.get("robot_truncated", False)
+                result.get("robots_truncated", False)
                 or result.get("result") != "SUCCESS"
             )
             raw_hash, policy_hash, byte_count, _ = robot_parser.finish(

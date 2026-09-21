@@ -79,7 +79,7 @@ def generate_crawl_dataframes(
         fetches.index_error,
         fetches.index_exception,
         fetches.meta_tags_truncated,
-        fetches.truncated,
+        fetches.truncated AS robots_truncated,
         fetches.completed
         FROM fetches
         LEFT JOIN domains ON fetches.domain_id = domains.domain_id
@@ -141,13 +141,15 @@ def generate_crawl_dataframes(
         master_domains.master_domain_names.domain_name,
         diagnostics.diagnostic_code,
         diagnostics.line_number,
-        diagnostics.raw
-        FROM parsed_data.diagnostics AS diagnostics
-        JOIN fetches ON fetches.fetch_id = diagnostics.fetch_id
+        diagnostics.raw,
+        diagnostics.diagnostic_id
+        FROM fetches
+        LEFT JOIN parsed_data.diagnostics AS diagnostics
+            ON diagnostics.fetch_id = fetches.fetch_id
         LEFT JOIN domains ON fetches.domain_id = domains.domain_id
         LEFT JOIN master_domains.master_domain_names ON
             domains.master_domain_id = master_domains.master_domain_names.master_domain_id
-        ORDER BY diagnostics.fetch_id, diagnostics.diagnostic_id
+        ORDER BY domains.master_domain_id, fetches.fetch_id, diagnostics.diagnostic_id
     """
     diagnostics_cursor = conn.execute(diagnostics_query)
     with open(output_dir / diagnostics_df_filename, "w", encoding="utf-8", newline="") as output:
@@ -174,8 +176,9 @@ def generate_crawl_dataframes(
             diagnostic_code,
             line_number,
             raw,
+            _diagnostic_id,
         ) in diagnostics_cursor:
-            row_key = (fetch_id, domain_id)
+            row_key = (master_domain_id, domain_id)
             if row_key != current_key:
                 write_diagnostics_row()
                 current_key = row_key
@@ -183,11 +186,12 @@ def generate_crawl_dataframes(
                     fetch_id, domain_id, master_domain_id, domain_name
                 ]
                 issue_data = {}
-            line_text = "" if line_number is None else str(line_number)
-            raw_text = "" if raw is None else str(raw)
-            issue_data.setdefault(diagnostic_code, []).append(
-                f"{line_text}: {raw_text}"
-            )
+            if diagnostic_code is not None:
+                line_text = "" if line_number is None else str(line_number)
+                raw_text = "" if raw is None else str(raw)
+                issue_data.setdefault(diagnostic_code, []).append(
+                    f"{line_text}: {raw_text}"
+                )
         write_diagnostics_row()
 
     #meta tag summary data
