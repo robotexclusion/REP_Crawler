@@ -39,11 +39,17 @@ def redirect_check(response_url, chunk):
 def truncate_meta_values(value, limit):
     if value is None:
         return None
-    text = str(value)
+    text = sanitize_text(str(value))
     if len(text.encode("utf-8")) <= limit:
         return text
     trimmed = text.encode("utf-8")[: limit - 3].decode("utf-8", errors="ignore")
     return trimmed + "..."
+
+#always remember to sanitize your text kids
+def sanitize_text(value):
+    if not isinstance(value, str):
+        return value
+    return value.encode("utf-8", errors="replace").decode("utf-8")
 
 
 #function to parse meta tag rules
@@ -183,7 +189,7 @@ async def check_meta_tags(response):
             record["robots_conflicting_rules"] = parsed["conflicting_rules"]
             record["robots_raw"] = parsed["raw"]
 
-        record_bytes = len(json.dumps(record, ensure_ascii=False).encode("utf-8"))
+        record_bytes = len(json.dumps(record, ensure_ascii=True).encode("utf-8"))
         if retained_bytes + record_bytes > MAX_META_TOTAL_BYTES:
             meta_tags_truncated = True
             break
@@ -483,18 +489,21 @@ async def process_domain(
             WHERE fetch_id = ?
         """, (
             result.get("status_code"),
-            result.get("result"),
+            sanitize_text(result.get("result")),
             result.get("has_robots"),
-            result.get("protocol"),
-            result.get("index_content_type"),
+            sanitize_text(result.get("protocol")),
+            sanitize_text(result.get("index_content_type")),
             result.get("index_truncated"),
             result.get("time"),
-            result.get("exception"),
-            result.get("index_response_status"),
-            result.get("index_last_exception"),
-            result.get("index_error"),
-            result.get("index_exception"),
-            json.dumps(result.get("meta_tags")) if result.get("meta_tags") else None,
+            sanitize_text(result.get("exception")),
+            sanitize_text(result.get("index_response_status")),
+            sanitize_text(result.get("index_last_exception")),
+            sanitize_text(result.get("index_error")),
+            sanitize_text(result.get("index_exception")),
+            (
+                json.dumps(result.get("meta_tags"), ensure_ascii=True)
+                if result.get("meta_tags") else None
+            ),
             result.get("meta_tags_truncated"),
             fetch_id
         ))

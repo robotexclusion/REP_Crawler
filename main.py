@@ -52,7 +52,7 @@ async def main():
     print(f"Max domains to crawl: {MAX_DOMAINS if MAX_DOMAINS else 'Unlimited'}")
 
     #Generate a unique crawl ID
-    if not skip_crawl:
+    if not skip_crawl and not args.resume:
         print("Generating crawl ID...")
         crawl_id = datetime.now().strftime("%Y%m%d%H%M")
 
@@ -62,6 +62,19 @@ async def main():
     base_dir = current_dir / "data"
     crawl_dir = base_dir / crawl_id
     output_dir = crawl_dir / "output"
+
+    if args.resume:
+        if not crawl_dir.is_dir():
+            raise FileNotFoundError(
+                f"No saved crawl found at {crawl_dir}. "
+                "Check --crawlid and the mounted data directory."
+            )
+        snapshots = sorted(crawl_dir.glob("tranco_list_*.csv"))
+        if not snapshots:
+            raise FileNotFoundError(
+                f"No saved Tranco snapshot found in {crawl_dir}. "
+                "Check --crawlid and the mounted data directory."
+            )
 
     #Paths for the crawl databases and the main domains db
     master_domain_db_path = base_dir /"domains.sqlite"
@@ -80,11 +93,6 @@ async def main():
         print("Downloading latest Tranco list...")
         TRANCO_FILE = download_latest_tranco_list(crawl_dir)
     elif args.resume:
-        snapshots = sorted(crawl_dir.glob("tranco_list_*.csv"))
-        if not snapshots:
-            raise FileNotFoundError(
-                f"No saved Tranco snapshot found in {crawl_dir}"
-            )
         TRANCO_FILE = snapshots[-1]
 
     #check if master database exists, if not create it

@@ -161,11 +161,6 @@ docker compose up -d crawler
 docker compose logs -f crawler
 ```
 
-Crawl databases, snapshots, and generated output are stored in the persistent
-`crawler-data` Docker volume mounted at `/app/data`. The container has no
-memory limit configured and can use host swap if swap is enabled. Heavy
-swapping will make the crawl very slow.
-
 To resume a stopped crawl, use its crawl ID:
 
 ```bash
