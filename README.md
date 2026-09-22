@@ -154,19 +154,9 @@ Run a crawl:
 docker compose run --rm crawler -a
 ```
 
-Run the full crawl in the background:
-
-```bash
-docker compose up -d crawler
-docker compose logs -f crawler
-```
-
 To resume a stopped crawl, use its crawl ID:
 
 ```bash
 docker compose run --rm crawler --autorun --resume \
 	--crawlid 202609202147 --max-domains 0
 ```
-
-The container is configured with `restart: "no"` so a completed crawl does not
-start again automatically.
