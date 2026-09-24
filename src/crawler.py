@@ -8,7 +8,7 @@ import time
 import json
 import os
 from datetime import datetime
-from tqdm.asyncio import tqdm_asyncio
+from tqdm import tqdm
 from bs4 import BeautifulSoup
 from src.parse import StreamingRobotParser
 from src.startup import checkpoint_crawl
@@ -20,7 +20,7 @@ MAX_META_TAGS = int(os.environ.get("REP_MAX_META_TAGS", 200))
 MAX_META_TAG_VALUE_BYTES = int(os.environ.get("REP_MAX_META_TAG_VALUE_BYTES", 8192))
 MAX_META_TOTAL_BYTES = int(os.environ.get("REP_MAX_META_TOTAL_BYTES", 8192))
 ROBOTS_DIRECTIVE_PATTERN = re.compile(
-    rb"(?im)^[ \t]*(?:user-agent|allow|disallow|sitemap|crawl-delay|host|clean-param)[ \t]*:"
+    rb"(?im)^[ \t]*(?:user-agent|allow|disallow|crawl-delay|host|clean-param)[ \t]*:"
 )
 
 #sometimes the website responds to a robots.txt query, but redirects to an unrelated page
@@ -262,6 +262,29 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                 allow_redirects=True
             ) as response:
                 elapsed = (time.time() - start) * 1000
+                redirect_count = len(response.history)
+
+                if redirect_count > 5:
+                    return {
+                        "status_code": response.status,
+                        "result": "TOO_MANY_REDIRECTS",
+                        "has_robots": 0,
+                        "protocol": protocol,
+                        "index_content_type": index_content_type,
+                        "index_truncated": index_truncated,
+                        "content": None,
+                        "time": elapsed,
+                        "exception": (
+                            "robots.txt response followed more than 5 redirects"
+                        ),
+                        "redirect_count": redirect_count,
+                        "meta_tags": meta_tags,
+                        "meta_tags_truncated": meta_tags_truncated,
+                        "index_response_status": index_response_status,
+                        "index_last_exception": index_last_exception,
+                        "index_error": index_error,
+                        "index_exception": index_exception
+                    }
 
                 #Server answered
                 if response.status == 200:
@@ -293,6 +316,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                                         f"{response.url} did not contain a "
                                         "recognized robots directive"
                                     ),
+                                    "redirect_count": redirect_count,
                                     "meta_tags": meta_tags,
                                     "meta_tags_truncated": meta_tags_truncated,
                                     "index_response_status": index_response_status,
@@ -329,6 +353,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                                     f"{response.url} did not contain a "
                                     "recognized robots directive"
                                 ),
+                                "redirect_count": redirect_count,
                                 "meta_tags": meta_tags,
                                 "meta_tags_truncated": meta_tags_truncated,
                                 "index_response_status": index_response_status,
@@ -349,6 +374,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                             f"robots.txt exceeds {MAX_ROBOTS_BYTES} bytes"
                             if truncated else None
                         ),
+                        "redirect_count": redirect_count,
                         "robot_bytes": received_bytes,
                         "robots_truncated": truncated,
                         "meta_tags": meta_tags,
@@ -369,6 +395,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                     "content": None,
                     "time": elapsed,
                     "exception": None,
+                    "redirect_count": redirect_count,
                     "meta_tags": meta_tags,
                     "meta_tags_truncated": meta_tags_truncated,
                     "index_response_status": index_response_status,
@@ -390,9 +417,14 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
 
         # Unexpected exception
         except Exception as e:
+            redirect_count = len(getattr(e, "history", ())) or None
             return {
                 "status_code": None,
-                "result": type(e).__name__,
+                "result": (
+                    "TOO_MANY_REDIRECTS"
+                    if isinstance(e, aiohttp.TooManyRedirects)
+                    else type(e).__name__
+                ),
                 "has_robots": None,
                 "protocol": protocol,
                 "index_content_type": index_content_type,
@@ -400,6 +432,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
                 "content": None,
                 "time": None,
                 "exception": str(e),
+                "redirect_count": redirect_count,
                 "meta_tags": meta_tags,
                 "meta_tags_truncated": meta_tags_truncated,
                 "index_response_status": index_response_status,
@@ -429,6 +462,7 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
         "content": None,
         "time": None,
         "exception": failure_exception,
+        "redirect_count": None,
         "robot_bytes": 0,
         "robots_truncated": False,
         "meta_tags": meta_tags,
@@ -479,6 +513,7 @@ async def process_domain(
                 index_content_type = ?,
                 index_truncated = ?,
                 response_time_ms = ?,
+                redirect_count = ?,
                 exception = ?,
                 index_response_status = ?,
                 index_last_exception = ?,
@@ -495,6 +530,7 @@ async def process_domain(
             sanitize_text(result.get("index_content_type")),
             result.get("index_truncated"),
             result.get("time"),
+            result.get("redirect_count"),
             sanitize_text(result.get("exception")),
             sanitize_text(result.get("index_response_status")),
             sanitize_text(result.get("index_last_exception")),
@@ -513,22 +549,18 @@ async def process_domain(
                 result.get("robots_truncated", False)
                 or result.get("result") != "SUCCESS"
             )
-            raw_hash, policy_hash, byte_count, _ = robot_parser.finish(
+            byte_count, _ = robot_parser.finish(
                 robot_truncated
             )
             cur.execute("""
                 UPDATE fetches
                 SET
-                    sha256 = ?,
                     bytes = ?,
-                    policy_hash = ?,
                     truncated = ?,
                     completed = 1
                 WHERE fetch_id = ?
             """, (
-                raw_hash,
                 byte_count,
-                policy_hash,
                 int(robot_truncated),
                 fetch_id
             ))
@@ -545,7 +577,7 @@ async def process_domain(
 #function for connections and running the crawler
 async def run_crawl(
     df, USER_AGENT, TIMEOUT, CONCURRENCY, LIMIT_PER_HOST,
-    conn, master_conn, parsed_conn, crawl_id
+    conn, master_conn, parsed_conn, crawl_id, total_domains, completed_count
 ):
     timeout = aiohttp.ClientTimeout(
         total=TIMEOUT
@@ -568,18 +600,33 @@ async def run_crawl(
     #now connect to each one
     ) as session:
         db_lock = asyncio.Lock()
-        batch = []
-        batch_size = max(1500, 1)
-        for row in df:
-            batch.append(process_domain(
+        progress = tqdm(
+            total=total_domains,
+            initial=completed_count,
+            desc="Crawl progress",
+            unit="domain",
+            dynamic_ncols=True,
+        )
+
+        async def process_with_progress(row):
+            await process_domain(
                 session, row, conn, master_conn, parsed_conn,
                 crawl_id, db_lock
-            ))
-            if len(batch) >= batch_size:
-                await tqdm_asyncio.gather(*batch)
-                batch.clear()
-        if batch:
-            await tqdm_asyncio.gather(*batch)
+            )
+            progress.update(1)
+
+        try:
+            batch = []
+            batch_size = max(1500, 1)
+            for row in df:
+                batch.append(process_with_progress(row))
+                if len(batch) >= batch_size:
+                    await asyncio.gather(*batch)
+                    batch.clear()
+            if batch:
+                await asyncio.gather(*batch)
+        finally:
+            progress.close()
 
 #function to run main crawl
 async def main_crawl_func(
@@ -593,6 +640,8 @@ async def main_crawl_func(
         master_conn,
         parsed_conn,
         crawl_id,
+        total_domains,
+        completed_count,
         ):
     if args.autorun:
         print("Crawling domains.")
@@ -605,7 +654,9 @@ async def main_crawl_func(
                         conn, 
                         master_conn, 
                         parsed_conn,
-                        crawl_id
+                        crawl_id,
+                        total_domains,
+                        completed_count
                         )
         print("Crawl complete.")
     #manual execution
@@ -620,7 +671,9 @@ async def main_crawl_func(
                         conn, 
                         master_conn, 
                         parsed_conn,
-                        crawl_id
+                        crawl_id,
+                        total_domains,
+                        completed_count
                         )
         print("Crawl complete.")
     else:

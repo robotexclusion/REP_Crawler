@@ -130,6 +130,16 @@ async def main():
     # Execute the web crawl
     if not skip_crawl:
         completed = completed_ranks(conn, crawl_id)
+        total_domains = sum(
+            1 for _ in iter_tranco_domains(TRANCO_FILE, MAX_DOMAINS)
+        )
+        completed_count = sum(
+            1 for rank in completed if rank <= total_domains
+        )
+        print(
+            f"Crawl progress starts at {completed_count}/{total_domains} "
+            "completed domains."
+        )
         await main_crawl_func(
             args,
             (
@@ -145,7 +155,9 @@ async def main():
             conn,
             master_conn,
             parsed_conn,
-            crawl_id
+            crawl_id,
+            total_domains,
+            completed_count
             )
         finish_crawl(conn, crawl_id)
         conn.close()

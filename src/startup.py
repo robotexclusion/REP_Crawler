@@ -31,20 +31,25 @@ def setup_arg_parser():
                         )
     parser.add_argument("-o", "--output",
                         action = "store_true",
-                        help = "Skip crawling and generate output for a given crawl ID.")
+                        help = "Skip crawling and generate output for a given crawl ID."
+                        )
     parser.add_argument("-c", "--crawlid",
                         type = str,
-                        help = "crawl_id to use when skipping crawl step")
+                        help = "crawl_id to use when skipping crawl step"
+                        )
     parser.add_argument("-u", "--noupload",
                         action="store_true",
-                        help = "Don't upload the crawl data to the connected R2 bucket")
+                        help = "Don't upload the crawl data to the connected R2 bucket"
+                        )
     parser.add_argument("-r", "--resume",
                         action="store_true",
-                        help="Resume an interrupted crawl using its saved Tranco snapshot.")
-    parser.add_argument("--max-domains",
+                        help="Resume an interrupted crawl using its saved Tranco snapshot."
+                        )
+    parser.add_argument("-m", "--maxdomains",
                         type=int,
                         default=100,
-                        help="Maximum domains to process; use 0 for the full list.")
+                        help="Maximum domains to process; use 0 for the full list."
+                        )
 
     #parse cli args
     args = parser.parse_args()
@@ -191,7 +196,6 @@ def create_crawl_database(crawl_db_path):
         response_time_ms REAL,
         filename TEXT,
         bytes INTEGER,
-        sha256 TEXT,
         exception TEXT,
         index_content_type TEXT,
         index_truncated INTEGER,
@@ -199,10 +203,10 @@ def create_crawl_database(crawl_db_path):
         meta_tags TEXT,
         meta_tags_truncated INTEGER,
         index_response_status TEXT,
+        redirect_count INTEGER,
         index_last_exception TEXT,
         index_error TEXT,
         index_exception TEXT,
-        policy_hash TEXT,
         truncated INTEGER NOT NULL DEFAULT 0,
         completed INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (crawl_id) REFERENCES crawl(crawl_id),

@@ -15,8 +15,9 @@ SAMPLE_COLUMNS = [
     "timestamp", "protocol", "status_code", "result", "exception",
     "index_content_type", "index_response_status", "index_last_exception",
     "index_error", "index_exception", "index_truncated", "has_robots",
+    "redirect_count",
     "meta_tags_truncated", "robots_truncated",
-    "response_time_ms", "bytes", "sha256", "policy_hash",
+    "response_time_ms", "bytes",
     "completed", "parse_errors", "lines", "comments", "blank_lines",
     "user_agents", "directives", "diagnostics", "meta_tags",
 ]
@@ -25,9 +26,7 @@ SAMPLE_COLUMNS = [
 def setup_arg_parser():
     parser = argparse.ArgumentParser(
         prog="REP Crawler Validation",
-        description=(
-            "Generate reproducible samples for browser verification and "
-            "crawl comparison."
+        description=("Generate reproducible samples for browser verification and crawl comparison."
         ),
         usage="python validation.py [options]",
     )
@@ -201,10 +200,9 @@ def fetch_sample_rows(connection):
             fetches.index_exception,
             fetches.index_truncated,
             fetches.has_robots,
+            fetches.redirect_count,
             fetches.response_time_ms,
             fetches.bytes,
-            fetches.sha256,
-            fetches.policy_hash,
             fetches.truncated AS robots_truncated,
             fetches.meta_tags_truncated,
             fetches.completed,
@@ -308,14 +306,14 @@ def write_comparison(rows_by_crawl, domains, output_path):
         fields.extend([
             f"{crawl_id}_result", f"{crawl_id}_status_code",
             f"{crawl_id}_exception",
-            f"{crawl_id}_protocol", f"{crawl_id}_sha256",
-            f"{crawl_id}_policy_hash", f"{crawl_id}_bytes",
+            f"{crawl_id}_protocol", f"{crawl_id}_bytes",
             f"{crawl_id}_has_robots", f"{crawl_id}_robots_truncated",
             f"{crawl_id}_index_content_type",
             f"{crawl_id}_index_response_status",
             f"{crawl_id}_index_last_exception",
             f"{crawl_id}_index_error", f"{crawl_id}_index_exception",
             f"{crawl_id}_index_truncated",
+            f"{crawl_id}_redirect_count",
             f"{crawl_id}_meta_tags_truncated",
             f"{crawl_id}_parse_errors", f"{crawl_id}_diagnostics",
             f"{crawl_id}_meta_tags",

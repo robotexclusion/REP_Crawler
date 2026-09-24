@@ -1,14 +1,13 @@
 #Holds functions related to parsing the gathered data
 
 import codecs
-import hashlib
 import re
 import sqlite3
 
 #global rules for parsing directives
 #RFC 9309 directly permits allow and disallow, but infers others, these are common
 RFC9309_RULES = {"allow", "disallow"}
-EXTENSION_DIRECTIVES = {"sitemap", "crawl-delay", "host", "clean-param"}
+EXTENSION_DIRECTIVES = {"crawl-delay", "host", "clean-param"}
 PRODUCT_TOKEN_PATTERN = re.compile(r"^(?:\*|[-A-Za-z_]+)$")
 
 #function to create parser database
@@ -18,8 +17,6 @@ def create_parser_database(parsed_db_path):
 
         CREATE TABLE IF NOT EXISTS files (
             fetch_id INTEGER PRIMARY KEY,
-            sha256 TEXT,
-            policy_hash TEXT,
             lines INTEGER,
             comments INTEGER,
             blank_lines INTEGER,
@@ -108,8 +105,6 @@ class StreamingRobotParser:
         self.connection = parsed_conn
         self.cursor = parsed_conn.cursor()
         self.decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        self.raw_hasher = hashlib.sha256()
-        self.policy_parts = []
         self.buffer = ""
         self.byte_count = 0
         self.line_count = 0
@@ -154,7 +149,6 @@ class StreamingRobotParser:
     #function to feed parser chunks, loading large files would cause RAM issues
     def feed(self, chunk):
         self.byte_count += len(chunk)
-        self.raw_hasher.update(chunk)
         decoded = self.decoder.decode(chunk)
         for _ in range(decoded.count("\ufffd")):
             self.diagnostic(
@@ -202,6 +196,8 @@ class StreamingRobotParser:
                 "Directive name is empty."
             )
             return
+        if directive == "sitemap":
+            return
         if directive == "user-agent" and not value:
             self.diagnostic(
                 "EMPTY_USER_AGENT", "error", raw, directive, value,
@@ -210,10 +206,18 @@ class StreamingRobotParser:
             return
         if directive == "user-agent":
             if not PRODUCT_TOKEN_PATTERN.fullmatch(value):
-                self.diagnostic(
-                    "INVALID_PRODUCT_TOKEN", "error", raw, directive, value,
-                    "User-agent value is not a valid RFC 9309 product token."
-                )
+                if any(character.isspace() for character in value):
+                    self.diagnostic(
+                        "NONSTANDARD_PRODUCT_TOKEN", "warning", raw,
+                        directive, value,
+                        "User-agent value contains spaces and is not a valid "
+                        "RFC 9309 product token."
+                    )
+                else:
+                    self.diagnostic(
+                        "INVALID_PRODUCT_TOKEN", "error", raw, directive, value,
+                        "User-agent value is not a valid RFC 9309 product token."
+                    )
             if self.current_group is None or self.group_has_directive:
                 self.group_number += 1
                 self.cursor.execute(
@@ -226,9 +230,6 @@ class StreamingRobotParser:
                 "INSERT INTO user_agents(group_id, line_number, user_agent) "
                 "VALUES (?,?,?)",
                 (self.current_group, self.line_count, value)
-            )
-            self.policy_parts.append(
-                f"G{self.group_number}|UA|{value.strip().lower()}"
             )
             return
         classification = classify_directive(directive)
@@ -258,9 +259,6 @@ class StreamingRobotParser:
                 classification, raw
             )
         )
-        self.policy_parts.append(
-            f"G{self.group_number}|D|{directive}|{value.strip()}"
-        )
         self.group_has_directive = directive in RFC9309_RULES
 
     #finalize parsing, file related issues
@@ -279,20 +277,15 @@ class StreamingRobotParser:
                 "TRUNCATED_RESPONSE", "error", None, None, None,
                 "Response exceeded the configured safety limit."
             )
-        raw_hash = self.raw_hasher.hexdigest()
-        policy_hash = hashlib.sha256(
-            "\n".join(self.policy_parts).encode("utf-8")
-        ).hexdigest()
         self.cursor.execute(
             """INSERT OR REPLACE INTO files(
-                fetch_id, sha256, policy_hash, lines, comments, blank_lines,
-                parse_errors, truncated
-            ) VALUES (?,?,?,?,?,?,?,?)""",
+                fetch_id, lines, comments, blank_lines, parse_errors, truncated
+            ) VALUES (?,?,?,?,?,?)""",
             (
-                self.fetch_id, raw_hash, policy_hash, self.line_count,
-                self.comments, self.blank_lines, self.errors, int(truncated)
+                self.fetch_id, self.line_count, self.comments, self.blank_lines,
+                self.errors, int(truncated)
             )
         )
         self.connection.commit()
         self.cursor.close()
-        return raw_hash, policy_hash, self.byte_count, self.errors
+        return self.byte_count, self.errors
