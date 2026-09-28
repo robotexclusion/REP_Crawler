@@ -1,0 +1,27 @@
+[project]
+name = "rep-crawler"
+version = "0.1.0"
+description = "Crawls domains in the TRANCO list to find implementations of Robots Exclusion Protocol"
+readme = "README.md"
+authors = [
+    { name = "robot" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.14.3",
+    "beautifulsoup4>=4.15.0",
+    "boto3>=1.42.0",
+    "python-dotenv>=1.2.3",
+    "requests>=2.34.2",
+    "tqdm>=4.70.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = false
+
+
+
