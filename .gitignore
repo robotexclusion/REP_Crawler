@@ -4,6 +4,7 @@ data/
 *.db
 *.sqlite
 *.csv
+tests/
 !src/exclusion_list.csv
 
 

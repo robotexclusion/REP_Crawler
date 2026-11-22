@@ -303,23 +303,16 @@ def single_crawl_validation(
 
 #check if the results from the first crawl match the second one
 def write_comparison(rows_by_crawl, domains, output_path):
+    compared_fields = [
+        field for field in SAMPLE_COLUMNS
+        if field not in {"domain_name", "https_homepage_url"}
+    ]
     fields = ["domain_name", "https_homepage_url"]
-    for crawl_id in rows_by_crawl:
-        fields.extend([
-            f"{crawl_id}_result", f"{crawl_id}_status_code",
-            f"{crawl_id}_exception",
-            f"{crawl_id}_protocol", f"{crawl_id}_bytes",
-            f"{crawl_id}_has_robots", f"{crawl_id}_robots_truncated",
-            f"{crawl_id}_index_content_type",
-            f"{crawl_id}_index_response_status",
-            f"{crawl_id}_index_last_exception",
-            f"{crawl_id}_index_error", f"{crawl_id}_index_exception",
-            f"{crawl_id}_index_truncated",
-            f"{crawl_id}_redirect_count",
-            f"{crawl_id}_meta_tags_truncated",
-            f"{crawl_id}_parse_errors", f"{crawl_id}_diagnostics",
-            f"{crawl_id}_meta_tags",
-        ])
+    fields.extend(
+        f"{crawl_id}_{field}"
+        for field in compared_fields
+        for crawl_id in rows_by_crawl
+    )
 
     indexed = {
         crawl_id: {row["domain_name"]: row for row in rows}
@@ -329,17 +322,18 @@ def write_comparison(rows_by_crawl, domains, output_path):
         writer = csv.DictWriter(output, fieldnames=fields)
         writer.writeheader()
         for domain in domains:
-            first = next(indexed[crawl_id][domain] for crawl_id in rows_by_crawl)
+            first = next(
+                indexed[crawl_id][domain] for crawl_id in rows_by_crawl
+            )
             record = {
                 "domain_name": domain,
                 "https_homepage_url": first["https_homepage_url"],
             }
-            for crawl_id, crawl_rows in indexed.items():
-                row = crawl_rows[domain]
-                prefix = f"{crawl_id}_"
-                for field in fields:
-                    if field.startswith(prefix):
-                        record[field] = row.get(field.removeprefix(prefix))
+            for field in compared_fields:
+                for crawl_id, crawl_rows in indexed.items():
+                    record[f"{crawl_id}_{field}"] = crawl_rows[domain].get(
+                        field
+                    )
             writer.writerow(record)
 
 
