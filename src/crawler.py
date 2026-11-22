@@ -143,6 +143,11 @@ def get_content_type(response):
 
     return index_content_type
 
+
+def exception_message(error):
+    return str(error).strip() or type(error).__name__
+
+
 #function to check if the domain we contacted is html, and if so check if it has meta robots tags
 async def check_meta_tags(response):
     html_bytes = await response.content.read(MAX_HTML_BYTES + 1)
@@ -244,11 +249,11 @@ async def fetch_robot(session, domain, on_robot_chunk=None):
             aiohttp.ClientConnectorError,
             asyncio.TimeoutError,
         ) as e:
-            index_error = str(e)
+            index_error = exception_message(e)
             continue
 
         except Exception as e:
-            index_exception = str(e)
+            index_exception = exception_message(e)
             break
 
     #check for robots.txt subdomain

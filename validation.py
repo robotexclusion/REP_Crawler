@@ -124,6 +124,24 @@ def create_sample_table(connection, domains):
     )
 
 
+def ensure_validation_indexes(connection):
+    indexes = (
+        "CREATE INDEX IF NOT EXISTS "
+        "idx_validation_fetches_domain_completed "
+        "ON fetches(domain_id, completed)",
+        "CREATE INDEX IF NOT EXISTS parsed_data."
+        "idx_validation_groups_fetch_id ON groups(fetch_id)",
+        "CREATE INDEX IF NOT EXISTS parsed_data."
+        "idx_validation_user_agents_group_id ON user_agents(group_id)",
+        "CREATE INDEX IF NOT EXISTS parsed_data."
+        "idx_validation_directives_group_id ON directives(group_id)",
+        "CREATE INDEX IF NOT EXISTS parsed_data."
+        "idx_validation_diagnostics_fetch_id ON diagnostics(fetch_id)",
+    )
+    for statement in indexes:
+        connection.execute(statement)
+
+
 def available_domains(connection):
     return [
         row[0]
@@ -143,42 +161,21 @@ def available_domains(connection):
 
 
 def common_domains(base_dir, crawl_ids):
-    first_connection, _ = connect_crawl(base_dir, crawl_ids[0])
-    aliases = []
-    try:
-        for index, crawl_id in enumerate(crawl_ids[1:], start=1):
-            alias = f"crawl_{index}"
-            aliases.append(alias)
-            paths = crawl_paths(base_dir, crawl_id)
-            first_connection.execute(
-                f"ATTACH DATABASE ? AS {alias}",
-                (str(paths["crawl_db"]),),
-            )
+    common = None
+    for crawl_id in crawl_ids:
+        print(f"Finding completed domains in crawl {crawl_id}...", flush=True)
+        connection, _ = connect_crawl(base_dir, crawl_id)
+        try:
+            domains = set(available_domains(connection))
+        finally:
+            connection.close()
 
-        query = """
-            SELECT master_domains.master_domain_names.domain_name
-            FROM master_domains.master_domain_names
-            JOIN domains AS first_domains ON
-                first_domains.master_domain_id = master_domain_names.master_domain_id
-            JOIN fetches AS first_fetches ON
-                first_fetches.domain_id = first_domains.domain_id
-                AND first_fetches.completed = 1
-        """
-        for alias in aliases:
-            query += f"""
-                JOIN {alias}.domains AS domains_{alias} ON
-                    domains_{alias}.master_domain_id = master_domain_names.master_domain_id
-                JOIN {alias}.fetches AS fetches_{alias} ON
-                    fetches_{alias}.domain_id = domains_{alias}.domain_id
-                    AND fetches_{alias}.completed = 1
-            """
-        query += (
-            " GROUP BY master_domains.master_domain_names.domain_name "
-            "ORDER BY master_domains.master_domain_names.domain_name"
-        )
-        return [row[0] for row in first_connection.execute(query)]
-    finally:
-        first_connection.close()
+        if common is None:
+            common = domains
+        else:
+            common.intersection_update(domains)
+
+    return sorted(common) if common is not None else []
 
 
 def fetch_sample_rows(connection):
@@ -273,6 +270,8 @@ def upload_validation_file(output_path):
 def sample_crawl(base_dir, crawl_id, domains, output_name):
     connection, crawl_dir = connect_crawl(base_dir, crawl_id)
     try:
+        print(f"Preparing validation indexes for crawl {crawl_id}...", flush=True)
+        ensure_validation_indexes(connection)
         create_sample_table(connection, domains)
         rows = fetch_sample_rows(connection)
         output_path = crawl_dir / output_name
@@ -346,7 +345,12 @@ def write_comparison(rows_by_crawl, domains, output_path):
 
 #validation for multiple crawls
 def multiple_crawl_validation(seed_value, num_samples, base_dir, crawl_ids):
+    print(
+        f"Finding domains completed in all {len(crawl_ids)} crawls...",
+        flush=True,
+    )
     domains = common_domains(base_dir, crawl_ids)
+    print(f"Found {len(domains)} common completed domains.", flush=True)
     indices = sample_indices(len(domains), num_samples, seed_value)
     selected_domains = [domains[index] for index in indices]
     rows_by_crawl = {}
