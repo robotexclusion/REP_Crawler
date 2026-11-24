@@ -142,20 +142,24 @@ def ensure_validation_indexes(connection):
         connection.execute(statement)
 
 
-def available_domains(connection):
+def available_domains(connection, crawl_id=None):
+    crawl_filter = "AND fetches.crawl_id = ?" if crawl_id is not None else ""
+    parameters = (crawl_id,) if crawl_id is not None else ()
     return [
         row[0]
         for row in connection.execute(
-            """
+            f"""
             SELECT master_domains.master_domain_names.domain_name
             FROM fetches
             JOIN domains ON fetches.domain_id = domains.domain_id
             JOIN master_domains.master_domain_names ON
                 domains.master_domain_id = master_domain_names.master_domain_id
             WHERE fetches.completed = 1
+            {crawl_filter}
             GROUP BY master_domains.master_domain_names.domain_name
             ORDER BY master_domains.master_domain_names.domain_name
-            """
+            """,
+            parameters,
         )
     ]
 
@@ -166,7 +170,7 @@ def common_domains(base_dir, crawl_ids):
         print(f"Finding completed domains in crawl {crawl_id}...", flush=True)
         connection, _ = connect_crawl(base_dir, crawl_id)
         try:
-            domains = set(available_domains(connection))
+            domains = set(available_domains(connection, crawl_id))
         finally:
             connection.close()
 
@@ -178,8 +182,10 @@ def common_domains(base_dir, crawl_ids):
     return sorted(common) if common is not None else []
 
 
-def fetch_sample_rows(connection):
-    query = """
+def fetch_sample_rows(connection, crawl_id=None):
+    crawl_filter = "AND fetches.crawl_id = ?" if crawl_id is not None else ""
+    parameters = (crawl_id,) if crawl_id is not None else ()
+    query = f"""
         SELECT
             sample.sample_index,
             master_domains.master_domain_names.domain_name,
@@ -241,12 +247,13 @@ def fetch_sample_rows(connection):
             domains.master_domain_id = master_domain_names.master_domain_id
         JOIN fetches ON fetches.domain_id = domains.domain_id
             AND fetches.completed = 1
+            {crawl_filter}
         LEFT JOIN parsed_data.files ON
             parsed_data.files.fetch_id = fetches.fetch_id
         ORDER BY sample.sample_index
     """
     rows = []
-    for row in connection.execute(query):
+    for row in connection.execute(query, parameters):
         item = dict(row)
         item["https_homepage_url"] = f"https://{item['domain_name']}"
         rows.append(item)
@@ -273,7 +280,7 @@ def sample_crawl(base_dir, crawl_id, domains, output_name):
         print(f"Preparing validation indexes for crawl {crawl_id}...", flush=True)
         ensure_validation_indexes(connection)
         create_sample_table(connection, domains)
-        rows = fetch_sample_rows(connection)
+        rows = fetch_sample_rows(connection, crawl_id)
         output_path = crawl_dir / output_name
         write_sample(rows, output_path)
         return rows, output_path
@@ -286,7 +293,7 @@ def single_crawl_validation(
 ):
     connection, _ = connect_crawl(base_dir, crawl_id)
     try:
-        available = available_domains(connection)
+        available = available_domains(connection, crawl_id)
     finally:
         connection.close()
 
@@ -318,13 +325,12 @@ def write_comparison(rows_by_crawl, domains, output_path):
         crawl_id: {row["domain_name"]: row for row in rows}
         for crawl_id, rows in rows_by_crawl.items()
     }
+    first_crawl = next(iter(indexed))
     with output_path.open("w", encoding="utf-8", newline="") as output:
         writer = csv.DictWriter(output, fieldnames=fields)
         writer.writeheader()
         for domain in domains:
-            first = next(
-                indexed[crawl_id][domain] for crawl_id in rows_by_crawl
-            )
+            first = indexed[first_crawl][domain]
             record = {
                 "domain_name": domain,
                 "https_homepage_url": first["https_homepage_url"],
