@@ -142,9 +142,10 @@ def ensure_validation_indexes(connection):
         connection.execute(statement)
 
 
-def available_domains(connection, crawl_id=None):
+def available_domains(connection, crawl_id=None, require_robots=False):
     crawl_filter = "AND fetches.crawl_id = ?" if crawl_id is not None else ""
     parameters = (crawl_id,) if crawl_id is not None else ()
+    robots_filter = "AND fetches.has_robots = 1" if require_robots else ""
     return [
         row[0]
         for row in connection.execute(
@@ -156,6 +157,7 @@ def available_domains(connection, crawl_id=None):
                 domains.master_domain_id = master_domain_names.master_domain_id
             WHERE fetches.completed = 1
             {crawl_filter}
+            {robots_filter}
             GROUP BY master_domains.master_domain_names.domain_name
             ORDER BY master_domains.master_domain_names.domain_name
             """,
@@ -167,10 +169,16 @@ def available_domains(connection, crawl_id=None):
 def common_domains(base_dir, crawl_ids):
     common = None
     for crawl_id in crawl_ids:
-        print(f"Finding completed domains in crawl {crawl_id}...", flush=True)
+        print(
+            "Finding completed domains with robots.txt results "
+            f"in crawl {crawl_id}...",
+            flush=True,
+        )
         connection, _ = connect_crawl(base_dir, crawl_id)
         try:
-            domains = set(available_domains(connection, crawl_id))
+            domains = set(
+                available_domains(connection, crawl_id, require_robots=True)
+            )
         finally:
             connection.close()
 
@@ -346,7 +354,8 @@ def write_comparison(rows_by_crawl, domains, output_path):
 #validation for multiple crawls
 def multiple_crawl_validation(seed_value, num_samples, base_dir, crawl_ids):
     print(
-        f"Finding domains completed in all {len(crawl_ids)} crawls...",
+        "Finding domains with completed robots.txt results in all "
+        f"{len(crawl_ids)} crawls...",
         flush=True,
     )
     domains = common_domains(base_dir, crawl_ids)
